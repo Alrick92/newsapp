@@ -2,8 +2,8 @@
 #
 # No ports are published to the host. The app listens on port 8000 inside the
 # shared "lb" network only; the load balancer joins the same network and routes
-# to http://newsfeed:8000. Create the network once:  docker network create lb
-# (or set LB_NETWORK to the network your load balancer already uses).
+# to http://newsfeed:8000. The network is created on first `up` if it doesn't
+# exist; if your load balancer already has one, set LB_NETWORK to its name.
 #
 # AI for trending stories connects to a remote endpoint configured in .env
 # (see .env.example): Claude, any OpenAI-compatible URL + API key, or a remote
@@ -48,5 +48,6 @@ volumes:
 
 networks:
   lb:
+    # Fixed name (not project-prefixed) so a load balancer can join it. Compose
+    # creates it when missing and attaches to it when it already exists.
     name: ${LB_NETWORK:-lb}
-    external: true

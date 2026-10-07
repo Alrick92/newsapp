@@ -22,8 +22,7 @@ only inside a Docker network it shares with your load balancer.
 
 ```bash
 cd newsapp
-cp .env.example .env            # pick an AI provider (optional)
-docker network create lb        # once; or set LB_NETWORK to your LB's network
+cp .env.example .env            # pick an AI provider; set LB_NETWORK if your LB has a network
 docker compose up -d --build
 ```
 
@@ -32,7 +31,9 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
 
 - **Load balancer setup:** the load balancer must be a container (Traefik,
   nginx, HAProxy, Caddy, …) attached to the same network, which is `lb`
-  unless you set `LB_NETWORK`. A load balancer outside Docker, such as a cloud
+  unless you set `LB_NETWORK`. If that network doesn't exist yet, `up`
+  creates it. If it does exist (for example the network your proxy or hosting
+  panel already uses), the app joins it. A load balancer outside Docker, such as a cloud
   load balancer, can't reach the container without a published port.
 - **Visitor addresses:** `X-Forwarded-For` / `X-Forwarded-Proto` from the load
   balancer are trusted, so logs show real client addresses. To trust only
