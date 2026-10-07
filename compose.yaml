@@ -1,0 +1,48 @@
+# Newsfeed behind a load balancer.
+#
+# No ports are published to the host. The app listens on port 8000 inside the
+# shared "lb" network only; the load balancer joins the same network and routes
+# to http://newsfeed:8000. Create the network once:  docker network create lb
+# (or set LB_NETWORK to the network your load balancer already uses).
+
+services:
+  newsfeed:
+    build: .
+    image: newsfeed:latest
+    restart: unless-stopped
+    env_file:
+      - path: .env          # ANTHROPIC_API_KEY etc.; see .env.example
+        required: false
+    environment:
+      # Only the load balancer can reach the container, so trust its
+      # X-Forwarded-* headers. Narrow this to the LB's address if you prefer.
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
+    volumes:
+      - newsfeed-data:/data
+    networks:
+      lb:
+        aliases: [newsfeed]
+    # The feed poller runs inside the app process: keep exactly one replica.
+    deploy:
+      replicas: 1
+    # Hardening: read-only image filesystem, writable /data volume and /tmp only.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  newsfeed-data:
+
+networks:
+  lb:
+    name: ${LB_NETWORK:-lb}
+    external: true

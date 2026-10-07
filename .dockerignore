@@ -1,0 +1,14 @@
+# Keep the image to the app itself.
+tests/
+data/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+*.db*
+*.json.imported
+pytest.ini
+README.md
+compose.yaml
+Dockerfile

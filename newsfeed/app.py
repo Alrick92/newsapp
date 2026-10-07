@@ -116,6 +116,11 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
         await trending.update(force=True)
         return trending.snapshot()
 
+    @app.get("/healthz")
+    def healthz() -> dict:
+        """Liveness for the load balancer and the container healthcheck."""
+        return {"ok": True, "stored": store.count(), "last_refresh": store.last_refresh}
+
     @app.get("/api/feeds")
     def feeds() -> list[dict]:
         return fetcher.status()

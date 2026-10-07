@@ -99,5 +99,6 @@ def test_api_in_demo_mode(monkeypatch):
         assert data["mode"] == "heuristic" and data["stories"]
 
         assert client.post("/api/refresh").json()["demo"] is True
+        assert client.get("/healthz").json()["ok"] is True
         assert "Newsfeed" in client.get("/").text
         assert client.get("/static/app.js").status_code == 200

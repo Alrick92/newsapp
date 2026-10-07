@@ -18,7 +18,10 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     from .app import create_app
-    uvicorn.run(create_app(), host=args.host, port=args.port)
+    # Behind a load balancer: trust X-Forwarded-For/Proto from the addresses in
+    # FORWARDED_ALLOW_IPS (uvicorn's default is 127.0.0.1 only).
+    uvicorn.run(create_app(), host=args.host, port=args.port, proxy_headers=True,
+                forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1"))
 
 
 if __name__ == "__main__":

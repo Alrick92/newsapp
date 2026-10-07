@@ -13,6 +13,40 @@ python -m newsfeed                       # http://127.0.0.1:8000
 python -m newsfeed --demo                # offline, fictional sample stories
 ```
 
+## Docker Compose (behind a load balancer)
+
+The container publishes **no ports**: there is no `ports:` or `expose:` in
+`compose.yaml` and no `EXPOSE` in the image. The app listens on port 8000
+only inside a Docker network it shares with your load balancer.
+
+```bash
+cd newsfeed
+cp .env.example .env            # add ANTHROPIC_API_KEY (optional)
+docker network create lb        # once; or set LB_NETWORK to your LB's network
+docker compose up -d --build
+```
+
+Point the load balancer at **`http://newsfeed:8000`** on that network. Use
+`GET /healthz` as its health check.
+
+- **Load balancer setup:** the load balancer must be a container (Traefik,
+  nginx, HAProxy, Caddy, …) attached to the same network, which is `lb`
+  unless you set `LB_NETWORK`. A load balancer outside Docker, such as a cloud
+  load balancer, can't reach the container without a published port.
+- **Visitor addresses:** `X-Forwarded-For` / `X-Forwarded-Proto` from the load
+  balancer are trusted, so logs show real client addresses. To trust only
+  your load balancer, set `FORWARDED_ALLOW_IPS` to its address.
+- **Data:** the SQLite database is in the `newsfeed-data` volume, so it
+  survives `docker compose down` / `up` and image rebuilds.
+  `docker compose down -v` deletes it.
+- **Replicas:** keep one replica. The feed poller runs inside the app, so a
+  second copy would poll every publisher twice and keep its own database.
+- **Hardening:** the container runs as a non-root user with a read-only
+  filesystem, all Linux capabilities dropped, a Docker health check and
+  rotated logs.
+- **Network access:** the container needs outbound HTTPS to the feed sites
+  and to `api.anthropic.com`.
+
 ## What it does
 
 - **26 feeds.** The 15-feed production bundle from the RSS research brief,
@@ -83,6 +117,7 @@ the rows they need, so stories aren't held in memory.
 | `POST /api/trending/refresh` | Regenerate trending now |
 | `POST /api/refresh` | Poll every feed now |
 | `GET /api/feeds` | Per-feed health: last success, last error, stories in the last 72h |
+| `GET /healthz` | Health check for the load balancer and Docker |
 | `GET /api/meta` | Sections, sources, 72h and 30-day totals, last refresh |
 
 ## Configuration
@@ -98,7 +133,8 @@ the rows they need, so stories aren't held in memory.
 | `NEWSFEED_RETENTION_DAYS` | `30` | Days to keep stories before purging |
 | `NEWSFEED_OG_IMAGE_BUDGET` | `40` | og:image lookups per refresh (`0` disables) |
 | `NEWSFEED_USER_AGENT` | generic | Identify your deployment to publishers |
-| `HOST` / `PORT` | `127.0.0.1` / `8000` | Bind address |
+| `HOST` / `PORT` | `127.0.0.1` / `8000` (`0.0.0.0` in Docker) | Bind address |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` (`*` in Compose) | Proxies whose `X-Forwarded-*` headers are trusted |
 
 ## Style
 
