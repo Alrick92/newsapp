@@ -3,7 +3,7 @@
 const PAGE_SIZE = 60;
 const HOURS = [6, 12, 24, 72, 168, 720]; // the API caps this at the retention window
 const hoursLabel = (h) => (h % 24 === 0 && h > 72 ? `${h / 24}d` : `${h}h`);
-const CAT_COLOR = { world: "var(--cat-world)", ai: "var(--cat-ai)", tech: "var(--cat-tech)", security: "var(--cat-security)" };
+const CAT_COLOR = { world: "var(--cat-world)", ai: "var(--cat-ai)", tech: "var(--cat-tech)", security: "var(--cat-security)", economy: "var(--cat-economy)" };
 const FIRST_PARTY = new Set(["official-lab", "vendor-security", "government-advisory", "institutional"]);
 const EXT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 

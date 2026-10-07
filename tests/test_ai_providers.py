@@ -8,6 +8,7 @@ import pytest
 from newsfeed.ai import (AIError, AnthropicProvider, OllamaProvider, OpenAICompatibleProvider, parse_json_reply,
                          provider_from_env)
 from newsfeed.demo import demo_items
+from newsfeed.feeds import CATEGORIES
 from newsfeed.store import Store
 from newsfeed.trending import TrendingEngine, TrendingResult, ai_trending
 
@@ -24,7 +25,7 @@ def test_schema_is_strict_json_schema_compatible():
     story = schema["$defs"]["TrendingStory"]
     assert schema["additionalProperties"] is False and story["additionalProperties"] is False
     assert set(story["required"]) == set(story["properties"])
-    assert story["properties"]["category"]["enum"] == ["world", "ai", "tech", "security"]
+    assert story["properties"]["category"]["enum"] == list(CATEGORIES)  # every section, economy included
 
 
 @pytest.mark.parametrize("text", [

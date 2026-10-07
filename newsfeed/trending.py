@@ -31,7 +31,8 @@ AI_INTERVAL = float(os.environ.get("NEWSFEED_AI_REFRESH_HOURS") or 4) * 3600
 HEURISTIC_INTERVAL = int(os.environ.get("NEWSFEED_TRENDING_MINUTES") or 30) * 60
 MAX_STORIES = 12
 
-Category = Literal["world", "ai", "tech", "security"]
+# Must list the keys of feeds.CATEGORIES (a test checks they match).
+Category = Literal["world", "ai", "tech", "security", "economy"]
 
 
 class TrendingStory(BaseModel):
@@ -53,7 +54,7 @@ class TrendingResult(BaseModel):
 
 
 SYSTEM_PROMPT = f"""You are the trending-desk editor for a news aggregator that shows the last 72 hours of \
-headlines from {len(CATEGORIES)} sections: world & politics, AI, technology, and security.
+headlines from {len(CATEGORIES)} sections: {", ".join(CATEGORIES.values())}.
 
 You receive numbered items (age in hours, source, source class, section, title, snippet). Identify the \
 events that are trending: the same underlying story covered by several independent outlets, a story \

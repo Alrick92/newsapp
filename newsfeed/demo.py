@@ -83,6 +83,15 @@ _SAMPLES = [
      "The update closes several medium-severity issues and adds MFA options.", False),
     ("verge-tech", 24 * 27, "The best budget laptops of the season",
      "Our picks after testing a dozen machines under the price cap.", True),
+    # Economy (appended last so earlier sample indexes stay stable).
+    ("federal-reserve", 2, "Federal Reserve holds policy rate steady at June meeting",
+     "The committee kept the target range unchanged and signaled patience on future cuts.", False),
+    ("cnbc-economy", 3, "Federal Reserve holds rates steady, signals patience on cuts",
+     "Markets had priced in a pause; Treasury yields edged lower after the statement.", True),
+    ("bbc-business", 4, "US central bank keeps rates on hold as inflation cools",
+     "Officials said they want more evidence that price growth is returning to target.", True),
+    ("economist-finance", 30, "Why services inflation is proving so sticky",
+     "Wage growth and housing costs are keeping core prices elevated in several economies.", True),
 ]
 
 

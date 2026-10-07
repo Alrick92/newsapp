@@ -16,6 +16,7 @@ CATEGORIES = {
     "ai": "AI",
     "tech": "Technology",
     "security": "Security",
+    "economy": "Economy",
 }
 
 # Source classes, per the brief's automation notes.
@@ -68,6 +69,16 @@ FEEDS: tuple[Feed, ...] = (
     Feed("sans-isc", "SANS ISC", "https://isc.sans.edu/rssfeed_full.xml", "security", COMMUNITY, 30),
     Feed("cisa", "CISA", "https://www.cisa.gov/cybersecurity-advisories/all.xml", "security", GOVERNMENT, 30),
     Feed("krebs", "KrebsOnSecurity", "https://krebsonsecurity.com/feed/", "security", COMMUNITY, 30),
+    # Economy: newsroom business/economics desks, plus central banks as
+    # first-party (institutional) sources for rate decisions and policy.
+    Feed("bbc-business", "BBC Business", "https://feeds.bbci.co.uk/news/business/rss.xml", "economy"),
+    Feed("guardian-economics", "The Guardian Economics", "https://www.theguardian.com/business/economics/rss", "economy"),
+    Feed("cnbc-economy", "CNBC", "https://www.cnbc.com/id/20910258/device/rss/rss.html", "economy"),
+    Feed("npr-economy", "NPR Economy", "https://feeds.npr.org/1017/rss.xml", "economy"),
+    Feed("dw-business", "DW Business", "https://rss.dw.com/rdf/rss-en-bus", "economy"),
+    Feed("economist-finance", "The Economist", "https://www.economist.com/finance-and-economics/rss.xml", "economy", poll_minutes=30),
+    Feed("federal-reserve", "Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", "economy", INSTITUTIONAL, 30),
+    Feed("ecb", "European Central Bank", "https://www.ecb.europa.eu/rss/press.html", "economy", INSTITUTIONAL, 30),
 )
 
 FEEDS_BY_ID = {f.id: f for f in FEEDS}

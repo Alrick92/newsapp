@@ -1,6 +1,6 @@
 # Newsfeed
 
-A news aggregator for the last 72 hours of world, AI, technology and security
+A news aggregator for the last 72 hours of world, AI, technology, security and economy
 headlines. An AI model (Claude, Ollama, or any OpenAI-compatible endpoint)
 groups the window's stories into trending events. The UI
 shows card grids (image, title, description, URL) with a category dropdown,
@@ -57,10 +57,15 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
 
 ## What it does
 
-- **26 feeds.** The 15-feed production bundle from the RSS research brief,
+- **34 feeds.** The 15-feed production bundle from the RSS research brief,
   plus Microsoft Security, CISA, UN News, NPR, The Verge, WIRED (AI and
   Security), BBC Technology, IEEE Spectrum, Hugging Face and Krebs. They are
   listed in [`newsfeed/feeds.py`](newsfeed/feeds.py).
+- **Economy.** BBC Business, The Guardian Economics, CNBC Economy, NPR
+  Economy, DW Business and The Economist (finance & economics), plus the
+  Federal Reserve and the European Central Bank as first-party sources:
+  their own announcements, so they add authority to a story but don't count
+  as independent coverage.
 - **Polite polling.** Each feed polls on its own cadence (5, 15 or 30
   minutes, per the brief) and sends `ETag` / `If-Modified-Since`. A `304`
   counts as success. Send a descriptive `User-Agent` by setting
@@ -77,7 +82,7 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
   refresh (`NEWSFEED_OG_IMAGE_BUDGET`). Cards with no image get a placeholder
   in the category's colour.
 - **Views and filters.** Two tabs, Trending and Latest. A category dropdown
-  (All, World & Politics, AI, Technology, Security) with counts works in
+  (All, World & Politics, AI, Technology, Security, Economy) with counts works in
   both views. Latest also has search, a time window (6h, 12h, 24h, 72h, 7d, 30d), sources
   (multi-select), sort order and "with images only". All filters are stored
   in the URL hash, so a filtered view can be shared as a link.
