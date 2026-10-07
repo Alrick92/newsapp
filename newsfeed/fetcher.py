@@ -66,6 +66,12 @@ class Fetcher:
         now = time.time()
         due = [f for f in self.feeds
                if force or now - self.state.setdefault(f.id, FeedState()).last_polled >= f.poll_minutes * 60]
+        if not due:
+            # The common case for the once-a-minute check: no network, no HTTPS
+            # client (building one loads the CA bundle, ~80 ms of CPU), just
+            # the cheap retention purge.
+            self.store.purge()
+            return {"polled": 0, "added": 0, "total": self.store.count()}
         sem = asyncio.Semaphore(self.concurrency)
         async with self._client() as client:
             async def run(feed: Feed) -> list[Item]:

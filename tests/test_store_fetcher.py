@@ -140,3 +140,17 @@ def test_fetcher_conditional_get_and_og_image(rss_bytes, monkeypatch, tmp_path):
 
 def test_parse_feed_ignores_garbage():
     assert parse_feed(b"<html>not a feed</html>", FEEDS_BY_ID["bbc-world"], now=NOW) == []
+
+
+def test_idle_check_makes_no_http_client(tmp_path):
+    import time as _time
+    from newsfeed.fetcher import FeedState
+    store = Store(tmp_path / "newsfeed.db")
+    fetcher = Fetcher(store, feeds=(FEEDS_BY_ID["bbc-world"],))
+    fetcher.state["bbc-world"] = FeedState(last_polled=_time.time())  # polled just now: nothing due
+
+    def no_client():
+        raise AssertionError("an HTTP client was created although no feed was due")
+
+    fetcher._client = no_client
+    assert asyncio.run(fetcher.refresh()) == {"polled": 0, "added": 0, "total": 0}
