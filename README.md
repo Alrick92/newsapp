@@ -2,8 +2,8 @@
 
 A news aggregator for the last 72 hours of world, AI, technology and security
 headlines. Claude groups the window's stories into trending events. The UI
-shows tabbed card grids (image, title, description, URL) in Anthropic's
-palette and type.
+shows card grids (image, title, description, URL) with a category dropdown,
+in an "Ink & Teal" newsroom palette with Lora and Poppins type.
 
 ```bash
 cd newsfeed
@@ -32,7 +32,9 @@ python -m newsfeed --demo                # offline, fictional sample stories
   image, the server fetches the article's `og:image` for up to 40 items per
   refresh (`NEWSFEED_OG_IMAGE_BUDGET`). Cards with no image get a placeholder
   in the category's colour.
-- **Filters.** Section tabs, search, a time window (6/12/24/48/72h), sources
+- **Views and filters.** Two tabs, Trending and Latest. A category dropdown
+  (All, World & Politics, AI, Technology, Security) with counts works in
+  both views. Latest also has search, a time window (6/12/24/48/72h), sources
   (multi-select), sort order and "with images only". All filters are stored
   in the URL hash, so a filtered view can be shared as a link.
 - **Trending tab.** Claude (`claude-opus-5-5`, structured output) clusters
@@ -76,18 +78,23 @@ python -m newsfeed --demo                # offline, fictional sample stories
 
 ## Style
 
-The colours are Anthropic's brand palette:
+**Palette: Ink & Teal**, a cool newsroom scheme. All colours are CSS tokens at
+the top of `static/styles.css`, so swapping the palette means editing one block.
 
-- Ivory backgrounds, Slate text and Clay (`#d97757`) as the accent.
-- Each section has its own accent: Sky for world, Clay for AI, Olive for
-  tech and Fig for security.
+| Role | Light | Dark |
+|---|---|---|
+| Background | `#f6f8f9` paper | `#0c141d` |
+| Surface | `#ffffff` | `#132030` |
+| Text | `#0f1b2a` ink | `#eaf0f5` |
+| Secondary text | `#33475b` / `#5f6f80` | `#b4c2cf` / `#8496a7` |
+| Accent (links, active tab, momentum) | `#0e7c72` teal | `#2bb3a3` |
 
-The page asks for Anthropic's own typefaces, **Styrene** (sans) and
-**Tiempos Text** (serif). These are commercially licensed, so they are only
-used if they are installed or self-hosted under your own licence. Otherwise
-the page falls back to **Poppins** and **Lora**, the substitutes in
-Anthropic's brand guidelines, which load from Google Fonts. A light and dark
-theme are included.
+Each section has its own colour, used for the category dot, card chips and
+image placeholders: World `#2e64a8` blue, AI `#7a5af0` violet, Technology
+`#d9922e` amber, Security `#d1495b` crimson.
+
+**Type:** Lora for headlines and Poppins for the interface, both loaded from
+Google Fonts. Light and dark themes are included.
 
 ## Content use
 

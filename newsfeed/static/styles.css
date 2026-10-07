@@ -1,50 +1,44 @@
 /*
- * Anthropic brand palette and type.
- * Styrene B / Tiempos Text are Anthropic's licensed faces; if they are not
- * installed, Poppins and Lora (the brand-guideline fallbacks) load from Google Fonts.
+ * "Ink & Teal" newsroom palette: cool paper, deep navy ink, one teal accent,
+ * and four distinct section colours. Type is Poppins (UI) and Lora (headlines).
  */
 :root {
-  --slate-dark: #141413;
-  --slate-medium: #3d3d3a;
-  --slate-light: #5e5d59;
-  --cloud-dark: #87867f;
-  --cloud-medium: #b0aea5;
-  --cloud-light: #d1cfc5;
-  --ivory-dark: #e8e6dc;
-  --ivory-medium: #f0eee6;
-  --ivory-light: #faf9f5;
-  --clay: #d97757;
-  --clay-deep: #c6613f;
-  --kraft: #d4a27f;
-  --manilla: #ebdbbc;
-  --oat: #e3dacc;
-  --sky: #6a9bcc;
-  --olive: #788c5d;
-  --fig: #c46686;
-  --heather: #cbcadb;
-  --cactus: #bcd1ca;
+  --ink-900: #0f1b2a;
+  --ink-700: #33475b;
+  --ink-500: #5f6f80;
+  --mist-300: #c9d3db;
+  --mist-200: #dce3e8;
+  --mist-100: #eaeff2;
+  --paper: #f6f8f9;
+  --teal-600: #0e7c72;
+  --teal-700: #0a6159;
+  --teal-100: #d5eeea;
+  --amber-100: #f7e6c8;
 
-  --font-sans: "Styrene B", "Styrene A", "Anthropic Sans", "Poppins", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-serif: "Tiempos Text", "Anthropic Serif", "Lora", ui-serif, Georgia, "Times New Roman", serif;
+  --font-sans: "Poppins", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Lora", ui-serif, Georgia, "Times New Roman", serif;
 
-  --bg: var(--ivory-light);
+  --bg: var(--paper);
   --surface: #ffffff;
-  --surface-2: var(--ivory-medium);
-  --border: var(--ivory-dark);
-  --border-strong: var(--cloud-light);
-  --text: var(--slate-dark);
-  --text-2: var(--slate-light);
-  --text-3: var(--cloud-dark);
-  --accent: var(--clay);
-  --accent-strong: var(--clay-deep);
-  --accent-soft: #f5e3da;
-  --focus: var(--clay);
-  --shadow: 0 1px 2px rgb(20 20 19 / 4%), 0 6px 20px -12px rgb(20 20 19 / 18%);
+  --surface-2: var(--mist-100);
+  --border: var(--mist-200);
+  --border-strong: var(--mist-300);
+  --text: var(--ink-900);
+  --text-2: var(--ink-700);
+  --text-3: var(--ink-500);
+  --accent: var(--teal-600);
+  --accent-strong: var(--teal-700);
+  --accent-soft: var(--teal-100);
+  --focus: var(--teal-600);
+  --on-media: var(--ink-900);
+  --rank-bg: var(--ink-900);
+  --rank-fg: var(--paper);
+  --shadow: 0 1px 2px rgb(15 27 42 / 5%), 0 6px 20px -12px rgb(15 27 42 / 22%);
 
-  --cat-world: var(--sky);
-  --cat-ai: var(--clay);
-  --cat-tech: var(--olive);
-  --cat-security: var(--fig);
+  --cat-world: #2e64a8;
+  --cat-ai: #7a5af0;
+  --cat-tech: #d9922e;
+  --cat-security: #d1495b;
 
   --radius: 14px;
   color-scheme: light;
@@ -52,29 +46,33 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #1a1a18;
-    --surface: #232321;
-    --surface-2: #2b2b28;
-    --border: #34342f;
-    --border-strong: #46463f;
-    --text: var(--ivory-light);
-    --text-2: var(--cloud-light);
-    --text-3: var(--cloud-dark);
-    --accent-soft: #3b2a22;
+    --bg: #0c141d;
+    --surface: #132030;
+    --surface-2: #1a2a3c;
+    --border: #233447;
+    --border-strong: #30455b;
+    --text: #eaf0f5;
+    --text-2: #b4c2cf;
+    --text-3: #8496a7;
+    --accent: #2bb3a3;
+    --accent-strong: #4fd1c1;
+    --accent-soft: #12332f;
     --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px -14px rgb(0 0 0 / 60%);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #1a1a18;
-  --surface: #232321;
-  --surface-2: #2b2b28;
-  --border: #34342f;
-  --border-strong: #46463f;
-  --text: var(--ivory-light);
-  --text-2: var(--cloud-light);
-  --text-3: var(--cloud-dark);
-  --accent-soft: #3b2a22;
+  --bg: #0c141d;
+  --surface: #132030;
+  --surface-2: #1a2a3c;
+  --border: #233447;
+  --border-strong: #30455b;
+  --text: #eaf0f5;
+  --text-2: #b4c2cf;
+  --text-3: #8496a7;
+  --accent: #2bb3a3;
+  --accent-strong: #4fd1c1;
+  --accent-soft: #12332f;
   --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px -14px rgb(0 0 0 / 60%);
   color-scheme: dark;
 }
@@ -145,18 +143,18 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .badge { display: inline-flex; white-space: nowrap; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
-.badge--demo { background: var(--manilla); color: var(--slate-dark); }
+.badge--demo { background: var(--amber-100); color: var(--ink-900); }
 .badge--ai { background: var(--accent-soft); color: var(--accent-strong); gap: 6px; }
 .badge--ai svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
 
 .page { padding-top: 20px; padding-bottom: 48px; }
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 22px; }
 .search {
-  flex: 1 1 260px; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px;
+  flex: 1 1 200px; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px;
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: 999px; color: var(--text-3);
 }
 .search:focus-within { border-color: var(--accent); }
-.search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; color: var(--text); font-size: 14px; }
+.search input { flex: 1; width: 0; min-width: 0; border: 0; background: none; outline: none; color: var(--text); font-size: 14px; }
 .segmented { display: inline-flex; padding: 3px; background: var(--surface-2); border-radius: 999px; }
 .segmented button {
   border: 0; background: none; height: 32px; padding: 0 12px; border-radius: 999px; cursor: pointer;
@@ -168,6 +166,12 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2387867f' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 16px;
   appearance: none; font-size: 14px; cursor: pointer;
 }
+.select--category { height: 40px; min-width: 190px; font-weight: 500; padding-left: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235f6f80' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"), radial-gradient(circle, var(--cat, var(--accent)) 0 4px, transparent 4.5px);
+  background-position: right 10px center, 12px center; background-size: 16px, 16px; background-repeat: no-repeat; }
+.select--category:focus-visible, .select:focus-visible { border-color: var(--accent); }
+.filters.is-trending .feed-only { display: none !important; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-2); cursor: pointer; user-select: none; }
 .toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
 
@@ -196,10 +200,10 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .card__media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .placeholder {
   position: absolute; inset: 0; display: flex; align-items: flex-end; padding: 14px 16px;
-  font-family: var(--font-serif); font-size: 22px; line-height: 1.15; color: var(--slate-dark);
+  font-family: var(--font-serif); font-size: 22px; line-height: 1.15; color: var(--on-media);
   background:
-    radial-gradient(circle at 78% 30%, color-mix(in srgb, var(--c) 85%, white) 0 22%, transparent 23%),
-    linear-gradient(160deg, color-mix(in srgb, var(--c) 30%, var(--ivory-light)), color-mix(in srgb, var(--c) 55%, var(--oat)));
+    radial-gradient(circle at 78% 30%, color-mix(in srgb, var(--c) 70%, white) 0 22%, transparent 23%),
+    linear-gradient(160deg, color-mix(in srgb, var(--c) 22%, var(--paper)), color-mix(in srgb, var(--c) 45%, var(--mist-100)));
 }
 .card__body { display: flex; flex-direction: column; gap: 8px; padding: 16px 18px 18px; flex: 1; }
 .card__meta { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-3); min-width: 0; }
@@ -235,7 +239,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .story__media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .story__rank {
   position: absolute; top: 14px; left: 14px; display: inline-flex; align-items: center; justify-content: center;
-  min-width: 34px; height: 34px; padding: 0 10px; border-radius: 999px; background: var(--slate-dark); color: var(--ivory-light);
+  min-width: 34px; height: 34px; padding: 0 10px; border-radius: 999px; background: var(--rank-bg); color: var(--rank-fg);
   font-weight: 600; font-size: 14px;
 }
 .story__body { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 20px; flex: 1; }
@@ -269,6 +273,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   .story--lead .story__body { padding: 18px 20px 20px; }
   .story--lead .story__title { font-size: 24px; }
   .segmented { order: 3; }
+  .category, .select--category { flex: 1 1 100%; width: 100%; }
   .filters { position: relative; }
   .dropdown { position: static; }
   .dropdown__panel { left: 0; right: 0; width: auto; }

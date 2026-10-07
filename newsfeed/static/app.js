@@ -8,10 +8,11 @@ const SPARK = '<svg class="tab__spark" viewBox="0 0 24 24" aria-hidden="true"><p
 const EXT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 
 const $ = (sel) => document.querySelector(sel);
-const state = { tab: "trending", q: "", hours: 72, sources: new Set(), sort: "newest", hasImage: false, offset: 0 };
+const state = { view: "trending", category: "", q: "", hours: 72, sources: new Set(), sort: "newest", hasImage: false, offset: 0 };
 let meta = null;
 let trendingTimer = null;
 let counts = null; // per-category totals for the current filters, once loaded
+let trendingData = null;
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -50,7 +51,7 @@ function el(tag, attrs = {}, ...children) {
 }
 
 function placeholder(category, label) {
-  return el("div", { class: "placeholder", style: `--c:${CAT_COLOR[category] || "var(--clay)"}` , text: label });
+  return el("div", { class: "placeholder", style: `--c:${CAT_COLOR[category] || "var(--accent)"}` , text: label });
 }
 
 function media(container, image, category, label) {
@@ -74,7 +75,10 @@ async function api(path, opts) {
 
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
-  state.tab = p.get("tab") || "trending";
+  const legacyTab = p.get("tab"); // links from before the category dropdown
+  state.view = p.get("view") === "latest" || (legacyTab && legacyTab !== "trending") ? "latest" : "trending";
+  const cat = p.get("cat") || legacyTab;
+  state.category = meta?.categories[cat] ? cat : "";
   state.q = p.get("q") || "";
   state.hours = HOURS.includes(+p.get("hours")) ? +p.get("hours") : 72;
   state.sources = new Set((p.get("sources") || "").split(",").filter(Boolean));
@@ -84,7 +88,8 @@ function readHash() {
 
 function writeHash() {
   const p = new URLSearchParams();
-  if (state.tab !== "trending") p.set("tab", state.tab);
+  if (state.view !== "trending") p.set("view", state.view);
+  if (state.category) p.set("cat", state.category);
   if (state.q) p.set("q", state.q);
   if (state.hours !== 72) p.set("hours", state.hours);
   if (state.sources.size) p.set("sources", [...state.sources].join(","));
@@ -95,24 +100,39 @@ function writeHash() {
 }
 
 function filtersActive() {
-  return state.q || state.hours !== 72 || state.sources.size || state.sort !== "newest" || state.hasImage;
+  return state.category || state.q || state.hours !== 72 || state.sources.size || state.sort !== "newest" || state.hasImage;
 }
 
 // ---- chrome ----------------------------------------------------------------
 
 function renderTabs(counts) {
-  const tabs = [["trending", "Trending"], ["all", "All"], ...Object.entries(meta.categories)];
-  const known = counts !== null;
-  const total = Object.values(counts || {}).reduce((a, b) => a + b, 0);
-  $("#tabs").replaceChildren(...tabs.map(([id, label]) => {
-    const count = id === "all" ? total : (counts?.[id] ?? 0);
-    const btn = el("button", { class: "tab", role: "tab", type: "button", "aria-selected": String(state.tab === id), "data-tab": id });
+  const total = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : null;
+  const views = [["trending", "Trending"], ["latest", "Latest"]];
+  $("#tabs").replaceChildren(...views.map(([id, label]) => {
+    const btn = el("button", { class: "tab", role: "tab", type: "button", "aria-selected": String(state.view === id) });
     if (id === "trending") btn.insertAdjacentHTML("beforeend", SPARK);
     btn.append(label);
-    if (id !== "trending" && known) btn.append(el("span", { class: "tab__count", text: String(count) }));
-    btn.addEventListener("click", () => { state.tab = id; state.offset = 0; writeHash(); render(); });
+    if (id === "latest" && total !== null) btn.append(el("span", { class: "tab__count", text: String(total) }));
+    btn.addEventListener("click", () => { state.view = id; state.offset = 0; writeHash(); render(); });
     return btn;
   }));
+}
+
+// Category dropdown: item counts in Latest, story counts in Trending.
+function renderCategory() {
+  const select = $("#category");
+  let tally = counts;
+  if (state.view === "trending" && trendingData) {
+    tally = {};
+    for (const s of trendingData.stories) tally[s.category] = (tally[s.category] || 0) + 1;
+  }
+  const label = (text, n) => (tally ? `${text} (${n ?? 0})` : text);
+  const total = tally ? Object.values(tally).reduce((a, b) => a + b, 0) : 0;
+  select.replaceChildren(
+    el("option", { value: "", text: label("All categories", total) }),
+    ...Object.entries(meta.categories).map(([id, name]) => el("option", { value: id, text: label(name, tally?.[id]) })));
+  select.value = state.category;
+  select.style.setProperty("--cat", state.category ? CAT_COLOR[state.category] : "var(--accent)");
 }
 
 function renderHours() {
@@ -146,6 +166,8 @@ function syncControls() {
   $("#sort").value = state.sort;
   $("#has-image").checked = state.hasImage;
   $("#clear").hidden = !filtersActive();
+  $("#filters").classList.toggle("is-trending", state.view === "trending");
+  renderCategory();
   const n = state.sources.size;
   $("#sources-label").textContent = n === 0 ? "All sources" : n === 1
     ? meta.sources.find((s) => state.sources.has(s.id))?.name ?? "1 source" : `${n} sources`;
@@ -195,7 +217,7 @@ async function loadFeed(append = false) {
   const grid = $("#grid");
   if (!append) grid.replaceChildren(...Array.from({ length: 6 }, () => el("div", { class: "skeleton" })));
   const params = new URLSearchParams({ hours: state.hours, sort: state.sort, limit: PAGE_SIZE, offset: state.offset });
-  if (state.tab !== "all") params.set("category", state.tab);
+  if (state.category) params.set("category", state.category);
   if (state.q) params.set("q", state.q);
   if (state.sources.size) params.set("sources", [...state.sources].join(","));
   if (state.hasImage) params.set("has_image", "true");
@@ -209,6 +231,7 @@ async function loadFeed(append = false) {
   }
   counts = data.counts;
   renderTabs(counts);
+  renderCategory();
   const cards = data.items.map(card);
   if (append) grid.append(...cards);
   else if (cards.length) grid.replaceChildren(...cards);
@@ -266,6 +289,15 @@ async function loadTrending(force = false) {
     return;
   }
 
+  trendingData = data;
+  renderTrending();
+  if (data.running || !data.generated_at) trendingTimer = setTimeout(() => loadTrending(), 4000);
+}
+
+function renderTrending() {
+  const data = trendingData;
+  const box = $("#trending");
+  renderCategory();
   const sub = $("#trending-sub");
   sub.replaceChildren();
   if (data.mode === "claude") {
@@ -278,23 +310,27 @@ async function loadTrending(force = false) {
   }
   sub.append(data.generated_at ? `Clustered from the last 72 hours · ${timeAgo(data.generated_at)}` : "Analyzing headlines…");
 
-  if (!data.stories.length) {
+  const stories = data.stories.filter((s) => !state.category || s.category === state.category);
+  const pending = data.running || !data.generated_at;
+  if (stories.length) {
+    box.replaceChildren(...stories.map((s, i) => story(s, i + 1)));
+  } else if (data.stories.length) {
     box.replaceChildren(el("div", { class: "empty" },
-      el("h3", { text: data.running || !data.generated_at ? "Finding trending stories…" : "Nothing trending yet" }),
-      el("p", { text: data.running || !data.generated_at ? "This takes a few seconds." : "Stories appear here once several outlets cover the same event." })));
+      el("h3", { text: `Nothing trending in ${meta.categories[state.category]}` }),
+      el("p", { text: "Pick another category, or check back as coverage builds." })));
   } else {
-    box.replaceChildren(...data.stories.map((s, i) => story(s, i + 1)));
+    box.replaceChildren(el("div", { class: "empty" },
+      el("h3", { text: pending ? "Finding trending stories…" : "Nothing trending yet" }),
+      el("p", { text: pending ? "This takes a few seconds." : "Stories appear here once several outlets cover the same event." })));
   }
-  if (data.running || !data.generated_at) trendingTimer = setTimeout(() => loadTrending(), 4000);
 }
 
 // ---- wiring ----------------------------------------------------------------
 
 function render() {
-  const trending = state.tab === "trending";
+  const trending = state.view === "trending";
   $("#trending-view").hidden = !trending;
   $("#feed-view").hidden = trending;
-  $("#filters").hidden = trending;
   syncControls();
   renderTabs(counts);
   if (trending) loadTrending();
@@ -313,10 +349,17 @@ function wire() {
     clearTimeout(debounce);
     debounce = setTimeout(() => { state.q = e.target.value.trim(); state.offset = 0; changed(); }, 220);
   });
+  $("#category").addEventListener("change", (e) => {
+    state.category = e.target.value;
+    state.offset = 0;
+    writeHash();
+    syncControls();
+    if (state.view === "trending") { if (trendingData) renderTrending(); } else loadFeed();
+  });
   $("#sort").addEventListener("change", (e) => { state.sort = e.target.value; state.offset = 0; changed(); });
   $("#has-image").addEventListener("change", (e) => { state.hasImage = e.target.checked; state.offset = 0; changed(); });
   $("#clear").addEventListener("click", () => {
-    Object.assign(state, { q: "", hours: 72, sort: "newest", hasImage: false, offset: 0 });
+    Object.assign(state, { category: "", q: "", hours: 72, sort: "newest", hasImage: false, offset: 0 });
     state.sources.clear();
     renderSourcesPanel();
     changed();
@@ -334,7 +377,7 @@ function wire() {
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { panel.hidden = true; toggle.setAttribute("aria-expanded", "false"); }
-    if (e.key === "/" && document.activeElement.tagName !== "INPUT" && state.tab !== "trending") { e.preventDefault(); $("#q").focus(); }
+    if (e.key === "/" && document.activeElement.tagName !== "INPUT" && state.view !== "trending") { e.preventDefault(); $("#q").focus(); }
   });
 
   $("#theme").addEventListener("click", () => {
@@ -365,13 +408,13 @@ function wire() {
 }
 
 async function boot() {
-  readHash();
   meta = await api("/api/meta");
+  readHash();
   renderMeta();
   renderSourcesPanel();
   wire();
-  // Tab counts come from the item endpoint; fetch once so the Trending tab shows them too.
-  api(`/api/items?limit=1`).then((d) => { counts = d.counts; renderTabs(counts); }).catch(() => {});
+  // Counts come from the item endpoint; fetch once so the Trending view has them too.
+  api(`/api/items?limit=1`).then((d) => { counts = counts || d.counts; renderTabs(counts); renderCategory(); }).catch(() => {});
   render();
   setInterval(async () => {
     try { meta = await api("/api/meta"); renderMeta(); } catch {}

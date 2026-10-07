@@ -12,7 +12,9 @@ import hashlib
 from .feeds import FEEDS_BY_ID
 from .items import Item
 
-_PALETTE = ["#D97757", "#C6613F", "#E3DACC", "#BCD1CA", "#CBCADB", "#EBDBBC", "#141413", "#6A9BCC"]
+# Ink & Teal: soft tints for the sky, saturated section colours for the sun.
+_TINTS = ["#D5E2F2", "#E4DDFC", "#F7E6C8", "#F6D5DA", "#D5EEEA", "#EAEFF2"]
+_SOLIDS = ["#2E64A8", "#7A5AF0", "#D9922E", "#D1495B", "#0E7C72"]
 
 # (feed id, hours ago, title, description, has image)
 _SAMPLES = [
@@ -78,9 +80,9 @@ _SAMPLES = [
 def _art(seed: str) -> str:
     """Abstract SVG thumbnail in the house palette, as a data URI."""
     h = hashlib.sha1(seed.encode()).digest()
-    bg = _PALETTE[h[0] % 6]
-    fg = _PALETTE[(h[0] % 6 + 1 + h[1] % 4) % 6]
-    dark = "#141413"
+    bg = _TINTS[h[0] % len(_TINTS)]
+    fg = _SOLIDS[h[1] % len(_SOLIDS)]
+    dark = "#0F1B2A"
     cx, cy, r = 120 + h[2] % 360, 60 + h[3] % 180, 50 + h[4] % 90
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 340">'
