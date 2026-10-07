@@ -5,7 +5,6 @@ const HOURS = [6, 12, 24, 72, 168, 720]; // the API caps this at the retention w
 const hoursLabel = (h) => (h % 24 === 0 && h > 72 ? `${h / 24}d` : `${h}h`);
 const CAT_COLOR = { world: "var(--cat-world)", ai: "var(--cat-ai)", tech: "var(--cat-tech)", security: "var(--cat-security)" };
 const FIRST_PARTY = new Set(["official-lab", "vendor-security", "government-advisory", "institutional"]);
-const SPARK = '<svg class="tab__spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l1.9 6.1 6.1 1.9-6.1 1.9L12 18.5l-1.9-6.1L4 10.5l6.1-1.9z"/></svg>';
 const EXT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 
 const $ = (sel) => document.querySelector(sel);
@@ -111,7 +110,6 @@ function renderTabs(counts) {
   const views = [["trending", "Trending"], ["latest", "Latest"]];
   $("#tabs").replaceChildren(...views.map(([id, label]) => {
     const btn = el("button", { class: "tab", role: "tab", type: "button", "aria-selected": String(state.view === id) });
-    if (id === "trending") btn.insertAdjacentHTML("beforeend", SPARK);
     btn.append(label);
     if (id === "latest" && total !== null) btn.append(el("span", { class: "tab__count", text: String(total) }));
     btn.addEventListener("click", () => { state.view = id; state.offset = 0; writeHash(); render(); });
@@ -181,8 +179,9 @@ function syncControls() {
 
 function renderMeta() {
   const updated = meta.last_refresh ? `updated ${timeAgo(meta.last_refresh)}` : "waiting for first poll";
-  const archive = meta.stored > meta.total ? ` · ${meta.stored.toLocaleString()} kept for ${meta.retention_days} days` : "";
-  $("#meta").textContent = `Last ${meta.window_hours} hours · ${meta.total.toLocaleString()} stories from ${meta.sources.length} feeds${archive} · ${updated}`;
+  $("#meta").textContent = `${meta.total.toLocaleString()} stories in the last ${meta.window_hours} hours · ${updated}`;
+  $("#archive").textContent = meta.stored > meta.total
+    ? `${meta.stored.toLocaleString()} stories from ${meta.sources.length} feeds are kept for ${meta.retention_days} days.` : "";
   $("#demo-badge").hidden = !meta.demo;
 }
 
@@ -252,20 +251,21 @@ async function loadFeed(append = false) {
 
 // ---- trending view ---------------------------------------------------------
 
-function story(s, rank) {
+function story(s, rank, aiWritten) {
   const lead = rank === 1;
   const m = el("div", { class: "story__media" });
   media(m, s.image, s.category, meta.categories[s.category] || "");
-  m.append(el("span", { class: "story__rank", text: `#${rank}` }));
+  m.append(el("span", { class: "story__rank", text: String(rank), title: `Rank ${rank} of today's trending stories` }));
 
-  const primary = s.items[0];
-  const titleLink = el("a", { href: safeHref(primary?.url), target: "_blank", rel: "noopener noreferrer", text: s.headline });
-  const sources = el("ul", { class: "story__sources" }, ...s.items.slice(0, lead ? 8 : 5).map((it) =>
-    el("li", {}, el("a", { href: safeHref(it.url), target: "_blank", rel: "noopener noreferrer", title: it.title },
-      el("span", { class: "src-name" }, it.source, FIRST_PARTY.has(it.source_class) ? el("span", { class: "src-first", text: "first-party" }) : null),
-      el("span", { class: "src-title", text: it.title }),
-      el("span", { class: "src-time", text: timeAgo(it.published) })))));
-  const more = s.items.length - (lead ? 8 : 5);
+  const limit = lead ? 6 : 4;
+  const sources = el("ul", { class: "story__sources" }, ...s.items.slice(0, limit).map((it) =>
+    el("li", {},
+      el("a", { class: "src-title", href: safeHref(it.url), target: "_blank", rel: "noopener noreferrer", text: it.title }),
+      el("span", { class: "src-meta" },
+        el("span", { class: "src-name", text: it.source }),
+        FIRST_PARTY.has(it.source_class) ? el("span", { class: "src-first", text: "first-party", title: "The organization's own announcement; not independent coverage" }) : null,
+        el("span", { text: timeAgo(it.published) })))));
+  const more = s.items.length - limit;
 
   const chip = el("span", { class: "chip", text: meta.categories[s.category] || s.category, style: `--c:${CAT_COLOR[s.category]}` });
   return el("article", { class: `story${lead ? " story--lead" : ""}` }, m,
@@ -273,14 +273,13 @@ function story(s, rank) {
       el("div", { class: "card__meta" }, chip, el("span", { class: "dot", text: "·" }),
         el("span", { text: `${s.source_count} sources` }), el("span", { class: "dot", text: "·" }),
         el("span", { text: `latest ${timeAgo(s.latest)}` })),
-      el("h3", { class: "story__title" }, titleLink),
+      el("h3", { class: "story__title" },
+        el("a", { href: safeHref(s.items[0]?.url), target: "_blank", rel: "noopener noreferrer", text: s.headline })),
       el("p", { class: "story__summary", text: s.summary }),
-      s.why_trending ? el("p", { class: "story__why", text: s.why_trending }) : null,
-      el("div", { class: "momentum", title: "Momentum score" }, el("span", { text: "Momentum" }),
-        el("div", { class: "momentum__bar" }, el("span", { style: `width:${s.momentum}%` })),
-        el("strong", { text: String(s.momentum) })),
+      // Only an AI writes a real reason; keyword clustering would just restate the source count.
+      aiWritten && s.why_trending ? el("p", { class: "story__why", text: s.why_trending }) : null,
       sources,
-      more > 0 ? el("p", { class: "src-time", text: `+ ${more} more` }) : null));
+      more > 0 ? el("p", { class: "src-more", text: `${more} more ${more === 1 ? "source" : "sources"}` }) : null));
 }
 
 async function loadTrending(force = false) {
@@ -308,7 +307,6 @@ function renderTrending() {
   sub.replaceChildren();
   if (data.mode === "ai" || data.mode === "claude") {
     const badge = el("span", { class: "badge badge--ai", title: data.model ? `${data.provider} · ${data.model}` : "" });
-    badge.insertAdjacentHTML("beforeend", SPARK.replace('class="tab__spark"', ""));
     const by = data.provider === "anthropic" || data.mode === "claude" ? "Claude" : data.model || "AI";
     badge.append(`Curated by ${by}`);
     sub.append(badge);
@@ -320,7 +318,8 @@ function renderTrending() {
   const stories = data.stories.filter((s) => !state.category || s.category === state.category);
   const pending = data.running || !data.generated_at;
   if (stories.length) {
-    box.replaceChildren(...stories.map((s, i) => story(s, i + 1)));
+    const aiWritten = data.mode === "ai" || data.mode === "claude";
+    box.replaceChildren(...stories.map((s, i) => story(s, i + 1, aiWritten)));
   } else if (data.stories.length) {
     box.replaceChildren(el("div", { class: "empty" },
       el("h3", { text: `Nothing trending in ${meta.categories[state.category]}` }),

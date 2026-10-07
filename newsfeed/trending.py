@@ -153,7 +153,7 @@ def heuristic_trending(items: list[Item], now: float) -> list[dict]:
         category = Counter(i.category for i in members).most_common(1)[0][0]
         stories.append(_story_payload(
             lead.title, lead.description,
-            f"Covered by {len(sources)} sources across {len(members)} stories.",
+            "",  # no reason to give beyond the source count the card already shows
             category, momentum, members))
     stories.sort(key=lambda s: -s["momentum"])
     return stories[:MAX_STORIES]
