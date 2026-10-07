@@ -45,9 +45,9 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
 - **Hardening:** the container runs as a non-root user with a read-only
   filesystem, all Linux capabilities dropped, a Docker health check and
   rotated logs.
-- **Network access:** the container needs outbound HTTPS to the feed sites,
-  plus your AI endpoint (`api.anthropic.com`, your `OPENAI_BASE_URL`, or
-  the bundled Ollama, which also needs internet access to pull models).
+- **Network access:** the container needs outbound access to the feed sites
+  and to your AI endpoint: `api.anthropic.com`, your `OPENAI_BASE_URL`, or
+  your `OLLAMA_BASE_URL`. No AI service runs in this stack.
 
 ## What it does
 
@@ -95,9 +95,25 @@ clustering. The reason is shown in `GET /api/trending` under `error`.
 | Provider | Settings | Notes |
 |---|---|---|
 | `anthropic` (default when `ANTHROPIC_API_KEY` is set) | `ANTHROPIC_API_KEY`; `NEWSFEED_MODEL` defaults to `claude-opus-5-5` | Structured outputs. Server-side refusal fallback re-runs a declined request on a substitute model |
-| `openai` | `NEWSFEED_MODEL` (required), `OPENAI_BASE_URL` (default `https://api.openai.com/v1`), `OPENAI_API_KEY` (optional for local servers) | Any OpenAI-compatible `/chat/completions`: OpenAI, vLLM, LM Studio, LiteLLM, llama.cpp server, Together, Groq… |
-| `ollama` | `NEWSFEED_MODEL` (required, a model you've pulled), `OLLAMA_BASE_URL` (default `http://ollama:11434` in Compose) | Uses Ollama's own `/api/chat` with a JSON-schema `format` |
+| `openai` | `OPENAI_BASE_URL` (default `https://api.openai.com/v1`), `OPENAI_API_KEY` (optional), `NEWSFEED_MODEL` (required) | Any OpenAI-compatible `/chat/completions`: OpenAI, LiteLLM and other gateways, vLLM, LM Studio, llama.cpp server, Together, Groq, OpenRouter… |
+| `ollama` | `OLLAMA_BASE_URL` (required), `OLLAMA_API_KEY` (optional), `NEWSFEED_MODEL` (required, pulled on that server) | A remote Ollama server, called through its own `/api/chat` |
 | `none` | — | Keyword clustering only |
+
+Example `.env` entries:
+
+```bash
+# OpenAI-compatible endpoint
+NEWSFEED_AI_PROVIDER=openai
+OPENAI_BASE_URL=https://llm.example.com/v1     # up to and including /v1
+OPENAI_API_KEY=sk-...                          # sent as Authorization: Bearer
+NEWSFEED_MODEL=meta-llama/Llama-3.1-70B-Instruct
+
+# Remote Ollama
+NEWSFEED_AI_PROVIDER=ollama
+OLLAMA_BASE_URL=https://ollama.example.com     # server root; a trailing /v1 is ignored
+OLLAMA_API_KEY=                                # only if a proxy in front checks a Bearer token
+NEWSFEED_MODEL=llama3.1:8b
+```
 
 **OpenAI-compatible endpoints** don't all support the same JSON features.
 The app first asks for a strict JSON schema (`response_format: json_schema`).
@@ -115,19 +131,12 @@ app requests `NEWSFEED_OLLAMA_NUM_CTX` tokens (default 32768). The prompt for
 - **Model choice:** use an instruction-tuned model of about 8B parameters or
   more, e.g. `llama3.1:8b`, `qwen2.5:14b` or `mistral-nemo`. Smaller models
   often return valid JSON but group stories poorly.
-- **Bundled Ollama:** Compose includes an optional Ollama service on a private
-  network with no published ports:
-
-  ```bash
-  # .env: NEWSFEED_AI_PROVIDER=ollama  NEWSFEED_MODEL=llama3.1:8b
-  docker compose --profile ollama up -d
-  docker compose exec ollama ollama pull llama3.1:8b
-  ```
-
-  For a GPU, uncomment the `deploy.resources` block in `compose.yaml`
-  (needs the NVIDIA Container Toolkit).
-- **Ollama on the Docker host:** use
-  `OLLAMA_BASE_URL=http://host.docker.internal:11434`.
+- **Reaching the server:** the Ollama server must accept connections from
+  the app's host. By default Ollama listens on localhost only; on the Ollama
+  machine, set `OLLAMA_HOST=0.0.0.0` or put a reverse proxy in front of it.
+  Ollama has no authentication of its own, so expose it only on a private
+  network, or behind a proxy that checks a token (set `OLLAMA_API_KEY` to
+  that token).
 - **Speed:** local models are slow. Requests time out after 600 s for Ollama
   and 300 s for OpenAI-compatible endpoints (`NEWSFEED_AI_TIMEOUT`). Lower
   `NEWSFEED_TRENDING_MAX_ITEMS` if requests time out or replies are cut off.
@@ -174,7 +183,7 @@ the rows they need, so stories aren't held in memory.
 | `ANTHROPIC_API_KEY` | — | Claude credentials |
 | `OPENAI_BASE_URL` / `OPENAI_API_KEY` | `https://api.openai.com/v1` / — | OpenAI-compatible endpoint |
 | `NEWSFEED_AI_JSON_MODE` | `json_schema` | First JSON mode to try with `openai` (`json_object`, `none`) |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` (`http://ollama:11434` in Compose) | Ollama server |
+| `OLLAMA_BASE_URL` / `OLLAMA_API_KEY` | — (required for `ollama`) / — | Remote Ollama server; key is sent as a Bearer token |
 | `NEWSFEED_OLLAMA_NUM_CTX` | `32768` | Context window requested from Ollama |
 | `NEWSFEED_AI_TIMEOUT` | `300` / `600` (Ollama) | Seconds per AI request (Anthropic uses the SDK default) |
 | `NEWSFEED_TRENDING_MINUTES` | `30` | Minimum gap between regenerations |

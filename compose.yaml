@@ -5,11 +5,9 @@
 # to http://newsfeed:8000. Create the network once:  docker network create lb
 # (or set LB_NETWORK to the network your load balancer already uses).
 #
-# AI for trending stories is set in .env (NEWSFEED_AI_PROVIDER):
-#   anthropic  Claude, needs ANTHROPIC_API_KEY
-#   openai     any OpenAI-compatible endpoint: OPENAI_BASE_URL, OPENAI_API_KEY
-#   ollama     the bundled Ollama service below (start it with --profile ollama),
-#              or your own via OLLAMA_BASE_URL
+# AI for trending stories connects to a remote endpoint configured in .env
+# (see .env.example): Claude, any OpenAI-compatible URL + API key, or a remote
+# Ollama URL (+ optional API key). Nothing AI-related runs in this stack.
 
 services:
   newsfeed:
@@ -17,24 +15,17 @@ services:
     image: newsfeed:latest
     restart: unless-stopped
     env_file:
-      - path: .env          # ANTHROPIC_API_KEY etc.; see .env.example
+      - path: .env          # AI provider URL / API key etc.; see .env.example
         required: false
     environment:
       # Only the load balancer can reach the container, so trust its
       # X-Forwarded-* headers. Narrow this to the LB's address if you prefer.
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
-      # Defaults to the bundled Ollama service; override in .env for another host.
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-    # Lets OLLAMA_BASE_URL / OPENAI_BASE_URL point at a server on the Docker host
-    # (http://host.docker.internal:11434) on Linux as well as Docker Desktop.
-    extra_hosts:
-      - host.docker.internal:host-gateway
     volumes:
       - newsfeed-data:/data
     networks:
       lb:
         aliases: [newsfeed]
-      backend:
     # The feed poller runs inside the app process: keep exactly one replica.
     deploy:
       replicas: 1
@@ -52,42 +43,10 @@ services:
         max-size: 10m
         max-file: "3"
 
-  # Optional local LLM: docker compose --profile ollama up -d
-  # then pull the model named in NEWSFEED_MODEL:
-  #   docker compose exec ollama ollama pull llama3.1:8b
-  # Reachable only from the newsfeed container (private network, no ports).
-  ollama:
-    image: ollama/ollama:latest
-    profiles: [ollama]
-    restart: unless-stopped
-    volumes:
-      - ollama-models:/root/.ollama
-    networks:
-      backend:
-        aliases: [ollama]
-    environment:
-      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
-    # NVIDIA GPU (needs the NVIDIA Container Toolkit); remove on CPU-only hosts.
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-
 volumes:
   newsfeed-data:
-  ollama-models:
 
 networks:
   lb:
     name: ${LB_NETWORK:-lb}
     external: true
-  # Private app <-> Ollama network; not shared with the load balancer.
-  backend:

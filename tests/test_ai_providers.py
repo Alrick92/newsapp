@@ -96,13 +96,15 @@ def test_ollama_uses_native_chat_with_format_and_context():
 
     def handler(request):
         assert request.url.path == "/api/chat"
+        assert request.url.host == "ollama.example.com"
+        assert request.headers.get("authorization") == "Bearer ok-key"
         bodies.append(json.loads(request.content))
         return httpx.Response(200, json={"message": {"role": "assistant", "content": json.dumps(REPLY)},
                                          "done": True, "done_reason": "stop"})
 
     # A /v1 suffix (the OpenAI-compatible path) is stripped so the native API is used.
-    provider = OllamaProvider(model="qwen2.5:14b", base_url="http://ollama:11434/v1", num_ctx=16384,
-                              transport=httpx.MockTransport(handler))
+    provider = OllamaProvider(model="qwen2.5:14b", base_url="https://ollama.example.com/v1", api_key="ok-key",
+                              num_ctx=16384, transport=httpx.MockTransport(handler))
     result = asyncio.run(provider.generate("sys", "user", TrendingResult))
     assert result.stories[0].category == "security"
     body = bodies[0]
@@ -111,15 +113,29 @@ def test_ollama_uses_native_chat_with_format_and_context():
     assert body["format"]["$defs"]["TrendingStory"]
 
 
-def test_ollama_missing_model_is_actionable():
-    provider = OllamaProvider(model="nope", transport=httpx.MockTransport(lambda r: httpx.Response(404, json={"error": "model 'nope' not found"})))
-    with pytest.raises(AIError, match="ollama pull nope"):
+def test_ollama_without_key_sends_no_auth_header():
+    seen = []
+
+    def handler(request):
+        seen.append(request.headers.get("authorization"))
+        return httpx.Response(200, json={"message": {"content": json.dumps(REPLY)}, "done_reason": "stop"})
+
+    asyncio.run(OllamaProvider(model="m", base_url="http://10.0.0.5:11434",
+                               transport=httpx.MockTransport(handler)).generate("s", "u", TrendingResult))
+    assert seen == [None]
+
+
+@pytest.mark.parametrize("status,match", [(404, "ollama pull nope"), (401, "OLLAMA_API_KEY"), (403, "OLLAMA_API_KEY")])
+def test_ollama_errors_are_actionable(status, match):
+    provider = OllamaProvider(model="nope", base_url="https://ollama.example.com",
+                              transport=httpx.MockTransport(lambda r: httpx.Response(status, json={"error": "x"})))
+    with pytest.raises(AIError, match=match):
         asyncio.run(provider.generate("s", "u", TrendingResult))
 
 
 def test_provider_from_env(monkeypatch):
     for var in ("NEWSFEED_AI_PROVIDER", "NEWSFEED_MODEL", "NEWSFEED_DISABLE_AI", "ANTHROPIC_API_KEY",
-                "ANTHROPIC_AUTH_TOKEN", "OPENAI_BASE_URL", "OPENAI_API_KEY", "OLLAMA_BASE_URL",
+                "ANTHROPIC_AUTH_TOKEN", "OPENAI_BASE_URL", "OPENAI_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_API_KEY",
                 "NEWSFEED_TRENDING_MAX_ITEMS"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr("newsfeed.ai._anthropic_has_credentials", lambda: False)
@@ -129,15 +145,23 @@ def test_provider_from_env(monkeypatch):
     with pytest.raises(AIError, match="NEWSFEED_MODEL"):
         provider_from_env()
     monkeypatch.setenv("NEWSFEED_MODEL", "llama3.1:8b")
-    monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama:11434")
+    with pytest.raises(AIError, match="OLLAMA_BASE_URL"):  # remote server: no localhost default
+        provider_from_env()
+    monkeypatch.setenv("OLLAMA_BASE_URL", "https://ollama.example.com")
+    monkeypatch.setenv("OLLAMA_API_KEY", "ok-key")
     p = provider_from_env()
-    assert isinstance(p, OllamaProvider) and p.base_url == "http://ollama:11434" and p.max_items == 150
+    assert isinstance(p, OllamaProvider) and p.base_url == "https://ollama.example.com"
+    assert p.api_key == "ok-key" and p.max_items == 150
 
     monkeypatch.setenv("NEWSFEED_AI_PROVIDER", "openai")
-    monkeypatch.setenv("OPENAI_BASE_URL", "http://vllm:8000/v1")
+    monkeypatch.setenv("OPENAI_BASE_URL", "")  # empty line in .env: falls back to api.openai.com
+    assert provider_from_env().base_url == "https://api.openai.com/v1"
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.example.com/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-remote")
     monkeypatch.setenv("NEWSFEED_TRENDING_MAX_ITEMS", "250")
     p = provider_from_env()
-    assert isinstance(p, OpenAICompatibleProvider) and p.base_url == "http://vllm:8000/v1" and p.max_items == 250
+    assert isinstance(p, OpenAICompatibleProvider) and p.base_url == "https://llm.example.com/v1"
+    assert p.api_key == "sk-remote" and p.max_items == 250
 
     monkeypatch.setenv("NEWSFEED_AI_PROVIDER", "anthropic")
     with pytest.raises(AIError, match="ANTHROPIC_API_KEY"):
@@ -165,7 +189,7 @@ def test_engine_reports_misconfiguration_and_falls_back(monkeypatch):
 
 
 def test_engine_records_provider_and_model():
-    provider = OllamaProvider(model="llama3.1:8b", transport=httpx.MockTransport(
+    provider = OllamaProvider(model="llama3.1:8b", base_url="https://ollama.example.com", transport=httpx.MockTransport(
         lambda r: httpx.Response(200, json={"message": {"content": json.dumps(REPLY)}, "done_reason": "stop"})))
     store = Store()
     store.add(demo_items(time.time()))

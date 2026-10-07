@@ -5,8 +5,10 @@ Three backends return the same validated `TrendingResult`:
 - anthropic: Claude via the Anthropic SDK, with structured outputs.
 - openai:    any OpenAI-compatible /chat/completions endpoint (OpenAI, vLLM,
              LM Studio, LiteLLM, Together, Groq, ...) set by OPENAI_BASE_URL.
-- ollama:    Ollama's native /api/chat, which (unlike its /v1 shim) lets us
-             raise the context window so a long headline list isn't truncated.
+- ollama:    a remote Ollama server's native /api/chat (OLLAMA_BASE_URL, plus
+             OLLAMA_API_KEY when it sits behind an authenticating proxy). Unlike
+             its /v1 shim, the native API lets us raise the context window so a
+             long headline list isn't truncated.
 
 Select one with NEWSFEED_AI_PROVIDER; see `provider_from_env`.
 """
@@ -172,10 +174,11 @@ class OllamaProvider:
 
     name = "ollama"
 
-    def __init__(self, model: str, base_url: str = "http://localhost:11434", num_ctx: int = 32768,
+    def __init__(self, model: str, base_url: str, api_key: str | None = None, num_ctx: int = 32768,
                  timeout: float = 600, max_items: int = 150, transport: httpx.AsyncBaseTransport | None = None):
         self.model = model
         self.base_url = base_url.rstrip("/").removesuffix("/v1")
+        self.api_key = api_key
         self.num_ctx = num_ctx
         self.timeout = timeout
         self.max_items = max_items
@@ -190,13 +193,17 @@ class OllamaProvider:
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user + schema_instructions(schema)}],
         }
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
         async with httpx.AsyncClient(timeout=self.timeout, transport=self._transport) as client:
             try:
-                resp = await client.post(f"{self.base_url}/api/chat", json=body)
+                resp = await client.post(f"{self.base_url}/api/chat", json=body, headers=headers)
             except httpx.HTTPError as exc:
                 raise AIError(f"Ollama at {self.base_url} unreachable: {exc}") from exc
+        if resp.status_code in (401, 403):
+            raise AIError(f"Ollama at {self.base_url} rejected the request (HTTP {resp.status_code}); check OLLAMA_API_KEY")
         if resp.status_code == 404:
-            raise AIError(f"Ollama has no model '{self.model}'; run: ollama pull {self.model}")
+            raise AIError(f"Ollama at {self.base_url} has no model '{self.model}' (pull it on that server: "
+                          f"ollama pull {self.model})")
         if resp.status_code >= 400:
             raise AIError(f"Ollama returned HTTP {resp.status_code}: {resp.text[:200]}")
         try:
@@ -255,10 +262,14 @@ def provider_from_env() -> Provider | None:
 
     if choice == "ollama":
         if not model:
-            raise AIError("NEWSFEED_AI_PROVIDER=ollama needs NEWSFEED_MODEL (e.g. a model you have pulled)")
+            raise AIError("NEWSFEED_AI_PROVIDER=ollama needs NEWSFEED_MODEL (a model pulled on the Ollama server)")
+        base_url = os.environ.get("OLLAMA_BASE_URL")
+        if not base_url:
+            raise AIError("NEWSFEED_AI_PROVIDER=ollama needs OLLAMA_BASE_URL (e.g. http://ollama.example.com:11434)")
         return OllamaProvider(
             model=model,
-            base_url=os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434",
+            base_url=base_url,
+            api_key=os.environ.get("OLLAMA_API_KEY") or None,
             num_ctx=_env_int("NEWSFEED_OLLAMA_NUM_CTX", 32768),
             timeout=timeout or 600,
             max_items=int(max_items or 150),
