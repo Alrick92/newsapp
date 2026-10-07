@@ -12,7 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 CATEGORIES = {
-    "world": "World & Politics",
+    "world": "World",
+    "politics": "Politics",
     "ai": "AI",
     "tech": "Technology",
     "security": "Security",
@@ -29,14 +30,23 @@ GOVERNMENT = "government-advisory"
 INSTITUTIONAL = "institutional"
 COMMUNITY = "community/blog"
 
-# States covered by the Local category; each Local feed carries one of these codes.
+# Categories split into regions get a second dropdown in the UI. Every feed in
+# such a category carries one of its region codes.
 REGIONS = {
-    "GA": "Georgia",
-    "MD": "Maryland",
-    "PA": "Pennsylvania",
-    "VA": "Virginia",
-    "WV": "West Virginia",
+    "local": {
+        "GA": "Georgia",
+        "MD": "Maryland",
+        "PA": "Pennsylvania",
+        "VA": "Virginia",
+        "WV": "West Virginia",
+    },
+    "politics": {
+        "US": "United States",
+        "INTL": "International",
+    },
 }
+# Label for the dropdown's "everything" option.
+REGION_ALL_LABELS = {"local": "All states", "politics": "US and international"}
 
 
 @dataclass(frozen=True)
@@ -47,7 +57,7 @@ class Feed:
     category: str
     source_class: str = PUBLISHER
     poll_minutes: int = 15
-    region: str | None = None  # a REGIONS code, for Local feeds
+    region: str | None = None  # a REGIONS[category] code, for categories split by region
 
 
 FEEDS: tuple[Feed, ...] = (
@@ -91,6 +101,21 @@ FEEDS: tuple[Feed, ...] = (
     Feed("economist-finance", "The Economist", "https://www.economist.com/finance-and-economics/rss.xml", "economy", poll_minutes=30),
     Feed("federal-reserve", "Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", "economy", INSTITUTIONAL, 30),
     Feed("ecb", "European Central Bank", "https://www.ecb.europa.eu/rss/press.html", "economy", INSTITUTIONAL, 30),
+    # Politics. US: public broadcasters, papers of record, and specialist desks
+    # for Congress and the Supreme Court. International: national public
+    # broadcasters and outlets dedicated to politics and foreign policy.
+    Feed("npr-politics", "NPR Politics", "https://feeds.npr.org/1014/rss.xml", "politics", region="US"),
+    Feed("pbs-politics", "PBS NewsHour", "https://www.pbs.org/newshour/feeds/rss/politics", "politics", region="US"),
+    Feed("nyt-politics", "The New York Times", "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml", "politics", region="US"),
+    Feed("guardian-us-politics", "The Guardian US", "https://www.theguardian.com/us-news/us-politics/rss", "politics", region="US"),
+    Feed("the-hill", "The Hill", "https://thehill.com/homenews/feed/", "politics", region="US"),
+    Feed("roll-call", "Roll Call", "https://rollcall.com/feed/", "politics", region="US"),
+    Feed("scotusblog", "SCOTUSblog", "https://www.scotusblog.com/feed/", "politics", poll_minutes=30, region="US"),
+    Feed("bbc-politics", "BBC Politics", "https://feeds.bbci.co.uk/news/politics/rss.xml", "politics", region="INTL"),
+    Feed("guardian-politics", "The Guardian Politics", "https://www.theguardian.com/politics/rss", "politics", region="INTL"),
+    Feed("politico-europe", "POLITICO Europe", "https://www.politico.eu/feed/", "politics", region="INTL"),
+    Feed("cbc-politics", "CBC Politics", "https://www.cbc.ca/webfeed/rss/rss-politics", "politics", region="INTL"),
+    Feed("foreign-policy", "Foreign Policy", "https://foreignpolicy.com/feed/", "politics", poll_minutes=30, region="INTL"),
     # Local, by state: the States Newsroom statehouse outlet, nonprofit and
     # independent newsrooms, and community sites.
     # Georgia

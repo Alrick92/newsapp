@@ -3,7 +3,7 @@
 const PAGE_SIZE = 60;
 const HOURS = [6, 12, 24, 72, 168, 720]; // the API caps this at the retention window
 const hoursLabel = (h) => (h % 24 === 0 && h > 72 ? `${h / 24}d` : `${h}h`);
-const CAT_COLOR = { world: "var(--cat-world)", ai: "var(--cat-ai)", tech: "var(--cat-tech)", security: "var(--cat-security)", economy: "var(--cat-economy)",
+const CAT_COLOR = { world: "var(--cat-world)", politics: "var(--cat-politics)", ai: "var(--cat-ai)", tech: "var(--cat-tech)", security: "var(--cat-security)", economy: "var(--cat-economy)",
   local: "var(--cat-local)", blogs: "var(--cat-blogs)" };
 const FIRST_PARTY = new Set(["official-lab", "vendor-security", "government-advisory", "institutional"]);
 const EXT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
@@ -80,7 +80,8 @@ function readHash() {
   state.view = p.get("view") === "latest" || (legacyTab && legacyTab !== "trending") ? "latest" : "trending";
   const cat = p.get("cat") || legacyTab;
   state.category = meta?.categories[cat] ? cat : "";
-  state.region = state.category === "local" && meta?.regions?.[p.get("state")] ? p.get("state") : "";
+  const region = p.get("region") || p.get("state"); // "state" is the pre-Politics name
+  state.region = meta?.regions?.[state.category]?.[region] ? region : "";
   state.q = p.get("q") || "";
   state.hours = allowedHours().includes(+p.get("hours")) ? +p.get("hours") : 72;
   state.sources = new Set((p.get("sources") || "").split(",").filter(Boolean));
@@ -92,7 +93,7 @@ function writeHash() {
   const p = new URLSearchParams();
   if (state.view !== "trending") p.set("view", state.view);
   if (state.category) p.set("cat", state.category);
-  if (state.region) p.set("state", state.region);
+  if (state.region) p.set("region", state.region);
   if (state.q) p.set("q", state.q);
   if (state.hours !== 72) p.set("hours", state.hours);
   if (state.sources.size) p.set("sources", [...state.sources].join(","));
@@ -121,20 +122,23 @@ function renderTabs(counts) {
 }
 
 // Category dropdown: item counts in Latest, story counts in Trending.
-// Feed ids for the chosen state (Local only); null when no state is chosen.
+// Feed ids for the chosen region (a state in Local, US/International in
+// Politics); null when the category has no regions or none is chosen.
 function regionSources() {
-  if (state.category !== "local" || !state.region) return null;
-  return new Set(meta.sources.filter((s) => s.region === state.region).map((s) => s.id));
+  if (!state.region || !meta.regions?.[state.category]) return null;
+  return new Set(meta.sources
+    .filter((s) => s.category === state.category && s.region === state.region).map((s) => s.id));
 }
 
 function renderRegion() {
   const wrap = $("#region-wrap");
-  wrap.hidden = state.category !== "local" || !meta.regions || !Object.keys(meta.regions).length;
-  if (wrap.hidden) return;
+  const regions = meta.regions?.[state.category];
+  wrap.hidden = !regions;
+  if (!regions) return;
   const select = $("#region");
   select.replaceChildren(
-    el("option", { value: "", text: "All states" }),
-    ...Object.entries(meta.regions).map(([code, name]) => el("option", { value: code, text: name })));
+    el("option", { value: "", text: meta.region_all_labels?.[state.category] || "All regions" }),
+    ...Object.entries(regions).map(([code, name]) => el("option", { value: code, text: name })));
   select.value = state.region;
 }
 
@@ -249,7 +253,7 @@ async function loadFeed(append = false) {
   const inRegion = regionSources();
   let sources = [...state.sources];
   if (inRegion) sources = sources.length ? sources.filter((id) => inRegion.has(id)) : [...inRegion];
-  if (inRegion && !sources.length) sources = ["none"]; // picked sources are all outside the state
+  if (inRegion && !sources.length) sources = ["none"]; // picked sources are all outside the region
   if (sources.length) params.set("sources", sources.join(","));
   if (state.hasImage) params.set("has_image", "true");
 
@@ -360,7 +364,7 @@ function renderTrending() {
     box.replaceChildren(...stories.map((s, i) => story(s, i + 1, aiWritten)));
   } else if (data.stories.length) {
     box.replaceChildren(el("div", { class: "empty" },
-      el("h3", { text: `Nothing trending in ${inRegion ? meta.regions[state.region] : meta.categories[state.category]}` }),
+      el("h3", { text: `Nothing trending in ${inRegion ? meta.regions[state.category][state.region] : meta.categories[state.category]}` }),
       el("p", { text: "Pick another category, or check back as coverage builds." })));
   } else {
     box.replaceChildren(el("div", { class: "empty" },
@@ -395,7 +399,7 @@ function wire() {
   });
   $("#category").addEventListener("change", (e) => {
     state.category = e.target.value;
-    if (state.category !== "local") state.region = "";
+    state.region = ""; // regions belong to one category
     state.offset = 0;
     writeHash();
     syncControls();

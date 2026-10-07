@@ -32,7 +32,7 @@ HEURISTIC_INTERVAL = int(os.environ.get("NEWSFEED_TRENDING_MINUTES") or 30) * 60
 MAX_STORIES = 12
 
 # Must list the keys of feeds.CATEGORIES (a test checks they match).
-Category = Literal["world", "ai", "tech", "security", "economy", "local", "blogs"]
+Category = Literal["world", "politics", "ai", "tech", "security", "economy", "local", "blogs"]
 
 
 class TrendingStory(BaseModel):

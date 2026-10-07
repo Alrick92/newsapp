@@ -77,7 +77,7 @@ def test_api_in_demo_mode(monkeypatch):
     monkeypatch.setenv("NEWSFEED_DISABLE_AI", "1")
     with TestClient(create_app(demo=True)) as client:
         meta = client.get("/api/meta").json()
-        assert meta["demo"] and meta["total"] > 20 and set(meta["categories"]) == {"world", "ai", "tech", "security", "economy", "local", "blogs"}
+        assert meta["demo"] and meta["total"] > 20 and set(meta["categories"]) == {"world", "politics", "ai", "tech", "security", "economy", "local", "blogs"}
 
         all_items = client.get("/api/items").json()
         assert all_items["total"] == meta["total"]
@@ -105,15 +105,25 @@ def test_api_in_demo_mode(monkeypatch):
         assert client.get("/static/app.js").status_code == 200
 
 
-def test_local_feeds_are_tagged_by_state(monkeypatch):
+def test_regional_categories_tag_every_feed(monkeypatch):
     from newsfeed.feeds import FEEDS, REGIONS
-    assert set(REGIONS) == {"GA", "MD", "PA", "VA", "WV"}
+    assert set(REGIONS["local"]) == {"GA", "MD", "PA", "VA", "WV"}
+    assert set(REGIONS["politics"]) == {"US", "INTL"}
     for feed in FEEDS:
-        assert (feed.region in REGIONS) == (feed.category == "local"), feed.id
+        if feed.category in REGIONS:
+            assert feed.region in REGIONS[feed.category], feed.id
+        else:
+            assert feed.region is None, feed.id
+    for code in REGIONS["politics"]:  # both scopes have sources
+        assert any(f.category == "politics" and f.region == code for f in FEEDS)
     monkeypatch.setenv("NEWSFEED_DISABLE_AI", "1")
     with TestClient(create_app(demo=True)) as client:
         meta = client.get("/api/meta").json()
-        assert meta["regions"]["WV"] == "West Virginia"
+        assert meta["regions"]["local"]["WV"] == "West Virginia"
+        assert meta["region_all_labels"]["politics"] == "US and international"
+        intl = [s["id"] for s in meta["sources"] if s["category"] == "politics" and s["region"] == "INTL"]
+        found = client.get("/api/items", params={"category": "politics", "sources": ",".join(intl)}).json()
+        assert found["total"] and all(i["source_id"] in intl for i in found["items"])
         md = [s["id"] for s in meta["sources"] if s["region"] == "MD"]
         found = client.get("/api/items", params={"category": "local", "sources": ",".join(md)}).json()
         assert found["total"] and {i["source"] for i in found["items"]} <= {"Maryland Matters", "The Baltimore Sun", "Baltimore Brew"}
