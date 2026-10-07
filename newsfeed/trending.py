@@ -1,8 +1,9 @@
 """Trending stories: cluster the window's headlines into multi-source events.
 
-With ANTHROPIC_API_KEY (or another Anthropic credential) set, Claude clusters
-and ranks the stories and writes a short brief for each. Without one, a
-keyword-overlap heuristic produces the same shape so the tab still works.
+An AI provider (Claude, an OpenAI-compatible endpoint, or Ollama; see ai.py)
+clusters and ranks the stories and writes a short brief for each. With no
+provider configured, or when a request fails, a keyword-overlap heuristic
+produces the same shape so the tab still works.
 """
 
 from __future__ import annotations
@@ -14,17 +15,15 @@ import time
 from collections import Counter
 from typing import Literal
 
-import anthropic
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from .ai import AIError, Provider, provider_from_env
 from .feeds import CATEGORIES, PUBLISHER
 from .items import Item
 from .store import DISPLAY_HOURS, Store
 
 log = logging.getLogger(__name__)
 
-MODEL = os.environ.get("NEWSFEED_MODEL", "claude-opus-5-5")
-MAX_INPUT_ITEMS = int(os.environ.get("NEWSFEED_TRENDING_MAX_ITEMS", "400"))
 MIN_INTERVAL = int(os.environ.get("NEWSFEED_TRENDING_MINUTES", "30")) * 60
 MAX_STORIES = 12
 
@@ -32,6 +31,9 @@ Category = Literal["world", "ai", "tech", "security"]
 
 
 class TrendingStory(BaseModel):
+    # extra="forbid" emits additionalProperties: false, which strict JSON-schema modes require.
+    model_config = ConfigDict(extra="forbid")
+
     headline: str = Field(description="Neutral, specific headline for the event, under 90 characters")
     summary: str = Field(description="Two or three sentences on what happened, drawn only from the listed items")
     why_trending: str = Field(description="One sentence on why this is gaining attention (breadth of coverage, escalation, impact)")
@@ -41,6 +43,8 @@ class TrendingStory(BaseModel):
 
 
 class TrendingResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     stories: list[TrendingStory]
 
 
@@ -90,24 +94,12 @@ def _story_payload(headline: str, summary: str, why: str, category: str, momentu
     }
 
 
-async def claude_trending(items: list[Item], now: float, client: anthropic.AsyncAnthropic) -> list[dict]:
-    response = await client.beta.messages.parse(
-        model=MODEL,
-        max_tokens=16000,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": f"Current items ({len(items)}):\n\n{_render_items(items, now)}"}],
-        output_format=TrendingResult,
-        output_config={"effort": "medium"},
-        # Re-run on a substitute model if a safety classifier declines (e.g. on
-        # cyber-heavy security headlines) instead of returning nothing.
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
-    )
-    if response.stop_reason == "refusal" or response.parsed_output is None:
-        raise RuntimeError(f"trending request ended with stop_reason={response.stop_reason}")
-
+async def ai_trending(items: list[Item], now: float, provider: Provider) -> list[dict]:
+    """Ask the provider to cluster `items`; map its item numbers back to stories."""
+    user = f"Current items ({len(items)}):\n\n{_render_items(items, now)}"
+    result = await provider.generate(SYSTEM_PROMPT, user, TrendingResult)
     stories = []
-    for story in response.parsed_output.stories[:MAX_STORIES]:
+    for story in result.stories[:MAX_STORIES]:
         members = [items[n] for n in dict.fromkeys(story.item_ids) if 0 <= n < len(items)]
         if members:
             stories.append(_story_payload(story.headline, story.summary, story.why_trending,
@@ -168,34 +160,39 @@ def heuristic_trending(items: list[Item], now: float) -> list[dict]:
 
 
 class TrendingEngine:
-    def __init__(self, store: Store):
+    def __init__(self, store: Store, provider: Provider | None = None):
         self.store = store
         self.stories: list[dict] = []
-        self.mode = "none"  # "claude" | "heuristic" | "none"
+        self.mode = "none"  # "ai" | "heuristic" | "none"
+        self.provider_name: str | None = None
+        self.model: str | None = None
         self.generated_at: float | None = None
         self.error: str | None = None
         self.running = False
         self._version = -1
-        self._client: anthropic.AsyncAnthropic | None = None
-        self._ai_disabled = os.environ.get("NEWSFEED_DISABLE_AI") == "1"
+        self._provider = provider
+        self._resolved = provider is not None
+        self._config_error: str | None = None
         saved = store.get_meta("trending")
-        if saved:  # survive restarts without paying for a fresh Claude call
-            self.stories, self.mode = saved["stories"], saved["mode"]
-            self.generated_at, self.error = saved["generated_at"], saved.get("error")
+        if saved:  # survive restarts without paying for a fresh AI call
+            self.stories, self.generated_at, self.error = saved["stories"], saved["generated_at"], saved.get("error")
+            self.mode = "ai" if saved["mode"] in ("ai", "claude") else saved["mode"]
+            self.provider_name = saved.get("provider") or ("anthropic" if saved["mode"] == "claude" else None)
+            self.model = saved.get("model")
             self._version = store.version
 
-    def _get_client(self) -> anthropic.AsyncAnthropic | None:
-        if self._ai_disabled:
-            return None
-        if self._client is None:
-            client = anthropic.AsyncAnthropic()
-            # Constructing succeeds without credentials; the first call would fail.
-            if client.api_key or client.auth_token or client.credentials:
-                self._client = client
-            else:
-                log.info("no Anthropic credentials found; trending uses the keyword heuristic")
-                self._ai_disabled = True
-        return self._client
+    def _get_provider(self) -> Provider | None:
+        """Resolve NEWSFEED_AI_PROVIDER once; a misconfiguration is reported, not raised."""
+        if not self._resolved:
+            self._resolved = True
+            try:
+                self._provider = provider_from_env()
+                if self._provider:
+                    log.info("trending uses %s (%s)", self._provider.name, self._provider.model)
+            except AIError as exc:
+                log.error("AI provider misconfigured, using keyword clustering: %s", exc)
+                self._config_error = str(exc)
+        return self._provider
 
     def stale(self) -> bool:
         if self.store.version == self._version:
@@ -208,26 +205,30 @@ class TrendingEngine:
         self.running = True
         version = self.store.version
         now = time.time()
-        items = self.store.query(now=now, hours=DISPLAY_HOURS, limit=MAX_INPUT_ITEMS)
+        provider = self._get_provider()
+        limit = provider.max_items if provider else 400
+        items = self.store.query(now=now, hours=DISPLAY_HOURS, limit=limit)
         try:
-            client = self._get_client()
-            if client and items:
+            self.error = self._config_error
+            self.provider_name = self.model = None
+            if provider and items:
                 try:
-                    self.stories = await claude_trending(items, now, client)
-                    self.mode, self.error = "claude", None
-                except (anthropic.AnthropicError, RuntimeError) as exc:
-                    log.warning("Claude trending failed, using heuristic: %s", exc)
-                    self.error = str(exc)[:300]
+                    self.stories = await ai_trending(items, now, provider)
+                    self.mode, self.provider_name, self.model = "ai", provider.name, provider.model
+                except AIError as exc:
+                    log.warning("%s trending failed, using keyword clustering: %s", provider.name, exc)
+                    self.error = f"{provider.name}: {exc}"[:300]
                     self.stories, self.mode = heuristic_trending(items, now), "heuristic"
             else:
                 self.stories, self.mode = heuristic_trending(items, now), "heuristic"
             self.generated_at, self._version = time.time(), version
             self.store.set_meta("trending", {"stories": self.stories, "mode": self.mode,
+                                             "provider": self.provider_name, "model": self.model,
                                              "generated_at": self.generated_at, "error": self.error})
         finally:
             self.running = False
 
     def snapshot(self) -> dict:
-        return {"mode": self.mode, "model": MODEL if self.mode == "claude" else None,
+        return {"mode": self.mode, "provider": self.provider_name, "model": self.model,
                 "generated_at": self.generated_at, "running": self.running,
                 "error": self.error, "stories": self.stories}

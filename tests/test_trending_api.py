@@ -4,11 +4,11 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from newsfeed import trending
+from newsfeed.ai import AnthropicProvider
 from newsfeed.app import create_app
 from newsfeed.demo import demo_items
 from newsfeed.store import Store
-from newsfeed.trending import TrendingEngine, TrendingResult, TrendingStory, claude_trending, heuristic_trending
+from newsfeed.trending import TrendingEngine, TrendingResult, TrendingStory, ai_trending, heuristic_trending
 
 
 def test_heuristic_clusters_multi_source_stories():
@@ -36,7 +36,7 @@ def fake_client(result, stop_reason="end_turn"):
     return SimpleNamespace(beta=SimpleNamespace(messages=messages)), messages
 
 
-def test_claude_trending_maps_ids_and_validates():
+def test_ai_trending_maps_ids_and_validates():
     now = time.time()
     items = demo_items(now)
     result = TrendingResult(stories=[
@@ -45,12 +45,13 @@ def test_claude_trending_maps_ids_and_validates():
         TrendingStory(headline="Hallucinated", summary="s", why_trending="w", category="ai", item_ids=[999], momentum=90),
     ])
     client, messages = fake_client(result)
-    stories = asyncio.run(claude_trending(items, now, client))
+    provider = AnthropicProvider(model="claude-opus-5-5", client=client)
+    stories = asyncio.run(ai_trending(items, now, provider))
 
     assert [s["headline"] for s in stories] == ["VPN flaw exploited"]  # story with no valid ids dropped
     assert stories[0]["momentum"] == 100  # clamped
     assert [i["source"] for i in stories[0]["items"]] == ["BleepingComputer", "The Hacker News"]
-    assert messages.kwargs["model"] == trending.MODEL
+    assert messages.kwargs["model"] == "claude-opus-5-5"
     assert messages.kwargs["output_format"] is TrendingResult
     assert messages.kwargs["fallbacks"] == "default"
     assert "[17]" in messages.kwargs["messages"][0]["content"]
@@ -59,16 +60,16 @@ def test_claude_trending_maps_ids_and_validates():
 def test_engine_falls_back_to_heuristic_on_refusal():
     store = Store()
     store.add(demo_items(time.time()))
-    engine = TrendingEngine(store)
     client, _ = fake_client(None, stop_reason="refusal")
-    engine._client = client
+    engine = TrendingEngine(store, provider=AnthropicProvider(client=client))
     asyncio.run(engine.update(force=True))
     snap = engine.snapshot()
     assert snap["mode"] == "heuristic" and snap["stories"] and "refusal" in snap["error"]
+    assert snap["error"].startswith("anthropic:")
     assert not engine.stale()
 
     # A restarted process reuses the saved result instead of calling Claude again.
-    restarted = TrendingEngine(store)
+    restarted = TrendingEngine(store, provider=AnthropicProvider(client=client))
     assert restarted.snapshot()["stories"] == snap["stories"] and not restarted.stale()
 
 

@@ -306,10 +306,11 @@ function renderTrending() {
   renderCategory();
   const sub = $("#trending-sub");
   sub.replaceChildren();
-  if (data.mode === "claude") {
-    const badge = el("span", { class: "badge badge--ai" });
+  if (data.mode === "ai" || data.mode === "claude") {
+    const badge = el("span", { class: "badge badge--ai", title: data.model ? `${data.provider} · ${data.model}` : "" });
     badge.insertAdjacentHTML("beforeend", SPARK.replace('class="tab__spark"', ""));
-    badge.append("Curated by Claude");
+    const by = data.provider === "anthropic" || data.mode === "claude" ? "Claude" : data.model || "AI";
+    badge.append(`Curated by ${by}`);
     sub.append(badge);
   } else if (data.mode === "heuristic") {
     sub.append(el("span", { class: "badge badge--demo", text: "Keyword clustering" }));

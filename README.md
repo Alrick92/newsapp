@@ -1,14 +1,15 @@
 # Newsfeed
 
 A news aggregator for the last 72 hours of world, AI, technology and security
-headlines. Claude groups the window's stories into trending events. The UI
+headlines. An AI model (Claude, Ollama, or any OpenAI-compatible endpoint)
+groups the window's stories into trending events. The UI
 shows card grids (image, title, description, URL) with a category dropdown,
 in an "Ink & Teal" newsroom palette with Lora and Poppins type.
 
 ```bash
 git clone https://github.com/Alrick92/newsapp.git && cd newsapp
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-ant-...      # optional; enables Claude trending
+export ANTHROPIC_API_KEY=sk-ant-...      # optional; or see "AI providers" below
 python -m newsfeed                       # http://127.0.0.1:8000
 python -m newsfeed --demo                # offline, fictional sample stories
 ```
@@ -21,7 +22,7 @@ only inside a Docker network it shares with your load balancer.
 
 ```bash
 cd newsapp
-cp .env.example .env            # add ANTHROPIC_API_KEY (optional)
+cp .env.example .env            # pick an AI provider (optional)
 docker network create lb        # once; or set LB_NETWORK to your LB's network
 docker compose up -d --build
 ```
@@ -44,8 +45,9 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
 - **Hardening:** the container runs as a non-root user with a read-only
   filesystem, all Linux capabilities dropped, a Docker health check and
   rotated logs.
-- **Network access:** the container needs outbound HTTPS to the feed sites
-  and to `api.anthropic.com`.
+- **Network access:** the container needs outbound HTTPS to the feed sites,
+  plus your AI endpoint (`api.anthropic.com`, your `OPENAI_BASE_URL`, or
+  the bundled Ollama, which also needs internet access to pull models).
 
 ## What it does
 
@@ -73,19 +75,62 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
   both views. Latest also has search, a time window (6h, 12h, 24h, 72h, 7d, 30d), sources
   (multi-select), sort order and "with images only". All filters are stored
   in the URL hash, so a filtered view can be shared as a link.
-- **Trending tab.** Claude (`claude-opus-5-5`, structured output) clusters
-  up to 400 recent headlines into at most 12 events. Each event gets a
+- **Trending tab.** The configured AI model clusters the newest headlines
+  (400 for Claude, 150 for other providers) into at most 12 events. Each event gets a
   headline, summary, "why it's trending", a momentum score and links to
   every source.
   - First-party sources (labs, vendors, government, institutions) are labelled
     and not counted as independent corroboration.
   - Trending regenerates at most every 30 minutes, and only when the item set
     has changed (`NEWSFEED_TRENDING_MINUTES`).
-  - The request opts into server-side refusal fallbacks
-    (`fallbacks: "default"`), so security-heavy headlines that trip a safety
-    classifier are re-run on a substitute model instead of returning nothing.
-  - With no API key, or if the call fails, a keyword-overlap clusterer
-    produces the same layout. The UI labels which mode produced the stories.
+  - With no AI configured, or if a request fails, a keyword-overlap clusterer
+    produces the same layout. The UI shows which model produced the stories.
+
+## AI providers
+
+Choose one with `NEWSFEED_AI_PROVIDER` in `.env`. All three return the same
+JSON, checked against one schema, and any failure falls back to keyword
+clustering. The reason is shown in `GET /api/trending` under `error`.
+
+| Provider | Settings | Notes |
+|---|---|---|
+| `anthropic` (default when `ANTHROPIC_API_KEY` is set) | `ANTHROPIC_API_KEY`; `NEWSFEED_MODEL` defaults to `claude-opus-5-5` | Structured outputs. Server-side refusal fallback re-runs a declined request on a substitute model |
+| `openai` | `NEWSFEED_MODEL` (required), `OPENAI_BASE_URL` (default `https://api.openai.com/v1`), `OPENAI_API_KEY` (optional for local servers) | Any OpenAI-compatible `/chat/completions`: OpenAI, vLLM, LM Studio, LiteLLM, llama.cpp server, Together, Groq… |
+| `ollama` | `NEWSFEED_MODEL` (required, a model you've pulled), `OLLAMA_BASE_URL` (default `http://ollama:11434` in Compose) | Uses Ollama's own `/api/chat` with a JSON-schema `format` |
+| `none` | — | Keyword clustering only |
+
+**OpenAI-compatible endpoints** don't all support the same JSON features.
+The app first asks for a strict JSON schema (`response_format: json_schema`).
+If the endpoint rejects that with a 400, it retries with `json_object`, then
+with plain text. The prompt always includes the schema, and the reply is
+validated either way. The first mode that works is remembered. Set
+`NEWSFEED_AI_JSON_MODE` to start lower.
+
+**Ollama** is called through its own API rather than its OpenAI-compatible
+`/v1`. Ollama's default context is only a few thousand tokens, and the `/v1`
+API can't raise it, so a long headline list would be silently cut off. The
+app requests `NEWSFEED_OLLAMA_NUM_CTX` tokens (default 32768). The prompt for
+150 headlines is about 12k tokens.
+
+- **Model choice:** use an instruction-tuned model of about 8B parameters or
+  more, e.g. `llama3.1:8b`, `qwen2.5:14b` or `mistral-nemo`. Smaller models
+  often return valid JSON but group stories poorly.
+- **Bundled Ollama:** Compose includes an optional Ollama service on a private
+  network with no published ports:
+
+  ```bash
+  # .env: NEWSFEED_AI_PROVIDER=ollama  NEWSFEED_MODEL=llama3.1:8b
+  docker compose --profile ollama up -d
+  docker compose exec ollama ollama pull llama3.1:8b
+  ```
+
+  For a GPU, uncomment the `deploy.resources` block in `compose.yaml`
+  (needs the NVIDIA Container Toolkit).
+- **Ollama on the Docker host:** use
+  `OLLAMA_BASE_URL=http://host.docker.internal:11434`.
+- **Speed:** local models are slow. Requests time out after 600 s for Ollama
+  and 300 s for OpenAI-compatible endpoints (`NEWSFEED_AI_TIMEOUT`). Lower
+  `NEWSFEED_TRENDING_MAX_ITEMS` if requests time out or replies are cut off.
 
 ## Storage
 
@@ -97,7 +142,7 @@ the rows they need, so stories aren't held in memory.
 | Stories (title, summary, URL, image, source, time) | Nothing to rebuild; trending and search continue at once |
 | Feed caching details (`ETag` / `Last-Modified`), last success and error | First poll is a cheap "not modified" check, not a full download |
 | Which articles already had an image lookup | Image lookups aren't repeated |
-| Latest trending result | No extra Claude call on restart |
+| Latest trending result | No extra AI call on restart |
 
 - **Purge:** every refresh deletes stories older than the retention window and
   hands the space back to the disk.
@@ -124,11 +169,17 @@ the rows they need, so stories aren't held in memory.
 
 | Variable | Default | |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | — | Enables Claude trending |
-| `NEWSFEED_MODEL` | `claude-opus-5-5` | Model for trending |
+| `NEWSFEED_AI_PROVIDER` | `anthropic` if a key is set, else none | `anthropic`, `openai`, `ollama` or `none` |
+| `NEWSFEED_MODEL` | `claude-opus-5-5` (anthropic) | Model for trending; required for `openai` / `ollama` |
+| `ANTHROPIC_API_KEY` | — | Claude credentials |
+| `OPENAI_BASE_URL` / `OPENAI_API_KEY` | `https://api.openai.com/v1` / — | OpenAI-compatible endpoint |
+| `NEWSFEED_AI_JSON_MODE` | `json_schema` | First JSON mode to try with `openai` (`json_object`, `none`) |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` (`http://ollama:11434` in Compose) | Ollama server |
+| `NEWSFEED_OLLAMA_NUM_CTX` | `32768` | Context window requested from Ollama |
+| `NEWSFEED_AI_TIMEOUT` | `300` / `600` (Ollama) | Seconds per AI request (Anthropic uses the SDK default) |
 | `NEWSFEED_TRENDING_MINUTES` | `30` | Minimum gap between regenerations |
-| `NEWSFEED_TRENDING_MAX_ITEMS` | `400` | Newest items sent to the model |
-| `NEWSFEED_DISABLE_AI` | — | `1` forces the keyword clusterer |
+| `NEWSFEED_TRENDING_MAX_ITEMS` | `400` (Claude) / `150` | Newest items sent to the model |
+| `NEWSFEED_DISABLE_AI` | — | `1` forces the keyword clusterer (same as provider `none`) |
 | `NEWSFEED_DATA_DIR` | `data` | Folder for `newsfeed.db` |
 | `NEWSFEED_RETENTION_DAYS` | `30` | Days to keep stories before purging |
 | `NEWSFEED_OG_IMAGE_BUDGET` | `40` | og:image lookups per refresh (`0` disables) |
