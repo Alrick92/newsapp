@@ -92,6 +92,17 @@ _SAMPLES = [
      "Officials said they want more evidence that price growth is returning to target.", True),
     ("economist-finance", 30, "Why services inflation is proving so sticky",
      "Wage growth and housing costs are keeping core prices elevated in several economies.", True),
+    # Local and blogs (appended last so earlier sample indexes stay stable).
+    ("gothamist", 2, "Subway signal upgrade will close two Queens stations on weekends",
+     "Transit officials say the work runs through the end of next month.", True),
+    ("block-club-chicago", 5, "Neighbors push for protected bike lanes along Milwaukee Avenue",
+     "A packed community meeting backed a redesign proposed by the city's transportation department.", True),
+    ("houston-public-media", 8, "Houston opens cooling centers as heat advisory is extended",
+     "The city added evening hours at libraries and community centers.", False),
+    ("simon-willison", 6, "Notes on running a small open model for structured extraction",
+     "What worked, what didn't, and the prompt that finally produced valid JSON.", False),
+    ("calculated-risk", 9, "Existing home sales edge up in latest monthly report",
+     "Inventory continues to rise from last year's lows, while median prices are roughly flat.", False),
 ]
 
 

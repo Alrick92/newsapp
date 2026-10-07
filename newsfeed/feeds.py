@@ -17,6 +17,8 @@ CATEGORIES = {
     "tech": "Technology",
     "security": "Security",
     "economy": "Economy",
+    "local": "Local",
+    "blogs": "Blogs",
 }
 
 # Source classes, per the brief's automation notes.
@@ -79,6 +81,36 @@ FEEDS: tuple[Feed, ...] = (
     Feed("economist-finance", "The Economist", "https://www.economist.com/finance-and-economics/rss.xml", "economy", poll_minutes=30),
     Feed("federal-reserve", "Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", "economy", INSTITUTIONAL, 30),
     Feed("ecb", "European Central Bank", "https://www.ecb.europa.eu/rss/press.html", "economy", INSTITUTIONAL, 30),
+    # Local: newsrooms and community sites for major US metros.
+    # New York
+    Feed("nyt-nyregion", "The New York Times (N.Y.)", "https://rss.nytimes.com/services/xml/rss/nyt/NYRegion.xml", "local"),
+    Feed("gothamist", "Gothamist", "https://gothamist.com/feed", "local"),
+    Feed("eater-ny", "Eater NY", "https://ny.eater.com/rss/index.xml", "local", poll_minutes=30),
+    # Los Angeles
+    Feed("latimes-california", "Los Angeles Times", "https://www.latimes.com/california/rss2.0.xml", "local"),
+    Feed("eater-la", "Eater LA", "https://la.eater.com/rss/index.xml", "local", poll_minutes=30),
+    # Chicago
+    Feed("block-club-chicago", "Block Club Chicago", "https://blockclubchicago.org/feed/", "local"),
+    # Houston
+    Feed("houston-public-media", "Houston Public Media", "https://www.houstonpublicmedia.org/feed/", "local"),
+    Feed("houston-landing", "Houston Landing", "https://houstonlanding.org/feed/", "local", poll_minutes=30),
+    # Washington, DC
+    Feed("washington-city-paper", "Washington City Paper", "https://washingtoncitypaper.com/feed/", "local", poll_minutes=30),
+    Feed("washingtonian", "Washingtonian", "https://www.washingtonian.com/feed/", "local", poll_minutes=30),
+    # Blogs: independent writers. They post a few times a week at most, so 30 minutes is plenty.
+    # Tech and AI
+    Feed("simon-willison", "Simon Willison", "https://simonwillison.net/atom/everything/", "blogs", poll_minutes=30),
+    Feed("one-useful-thing", "One Useful Thing", "https://www.oneusefulthing.org/feed", "blogs", poll_minutes=30),
+    Feed("stratechery", "Stratechery", "https://stratechery.com/feed/", "blogs", poll_minutes=30),
+    Feed("benedict-evans", "Benedict Evans", "https://www.ben-evans.com/benedictevans?format=rss", "blogs", poll_minutes=30),
+    Feed("daring-fireball", "Daring Fireball", "https://daringfireball.net/feeds/main", "blogs", poll_minutes=30),
+    # Security
+    Feed("schneier", "Schneier on Security", "https://www.schneier.com/feed/atom/", "blogs", poll_minutes=30),
+    Feed("troy-hunt", "Troy Hunt", "https://www.troyhunt.com/rss/", "blogs", poll_minutes=30),
+    # Economy and finance
+    Feed("calculated-risk", "Calculated Risk", "https://www.calculatedriskblog.com/feeds/posts/default", "blogs", poll_minutes=30),
+    Feed("marginal-revolution", "Marginal Revolution", "https://marginalrevolution.com/feed", "blogs", poll_minutes=30),
+    Feed("noahpinion", "Noahpinion", "https://www.noahpinion.blog/feed", "blogs", poll_minutes=30),
 )
 
 FEEDS_BY_ID = {f.id: f for f in FEEDS}

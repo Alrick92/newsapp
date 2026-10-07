@@ -77,7 +77,7 @@ def test_api_in_demo_mode(monkeypatch):
     monkeypatch.setenv("NEWSFEED_DISABLE_AI", "1")
     with TestClient(create_app(demo=True)) as client:
         meta = client.get("/api/meta").json()
-        assert meta["demo"] and meta["total"] > 20 and set(meta["categories"]) == {"world", "ai", "tech", "security", "economy"}
+        assert meta["demo"] and meta["total"] > 20 and set(meta["categories"]) == {"world", "ai", "tech", "security", "economy", "local", "blogs"}
 
         all_items = client.get("/api/items").json()
         assert all_items["total"] == meta["total"]
