@@ -57,7 +57,7 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
 
 ## What it does
 
-- **54 feeds.** The 15-feed production bundle from the RSS research brief,
+- **59 feeds.** The 15-feed production bundle from the RSS research brief,
   plus Microsoft Security, CISA, UN News, NPR, The Verge, WIRED (AI and
   Security), BBC Technology, IEEE Spectrum, Hugging Face and Krebs. They are
   listed in [`newsfeed/feeds.py`](newsfeed/feeds.py).
@@ -66,10 +66,16 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
   Federal Reserve and the European Central Bank as first-party sources:
   their own announcements, so they add authority to a story but don't count
   as independent coverage.
-- **Local.** Newsrooms and community sites for major US metros: The New York
-  Times (N.Y. section), Gothamist and Eater NY; the Los Angeles Times
-  (California) and Eater LA; Block Club Chicago; Houston Public Media and
-  Houston Landing; Washington City Paper and Washingtonian.
+- **Local, by state.** Picking Local shows a second dropdown to narrow it to
+  one state (the choice is kept in the link, e.g. `#view=latest&cat=local&state=PA`).
+  - Georgia: Georgia Recorder, Rough Draft Atlanta, Atlanta Civic Circle
+  - Maryland: Maryland Matters, The Baltimore Sun, Baltimore Brew
+  - Pennsylvania: Pennsylvania Capital-Star, Spotlight PA, Billy Penn, PublicSource
+  - Virginia: Virginia Mercury, Cardinal News
+  - West Virginia: West Virginia Watch, Mountain State Spotlight, WV MetroNews
+
+  To add a state, add its code to `REGIONS` in `newsfeed/feeds.py` and give
+  its feeds `category="local", region="<code>"`.
 - **Blogs.** Independent writers on tech and AI (Simon Willison, One Useful
   Thing, Stratechery's free posts, Benedict Evans, Daring Fireball), security
   (Schneier on Security, Troy Hunt) and economics (Calculated Risk, Marginal

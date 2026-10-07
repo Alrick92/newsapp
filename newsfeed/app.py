@@ -13,7 +13,7 @@ from fastapi import FastAPI, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .feeds import CATEGORIES, FEEDS
+from .feeds import CATEGORIES, FEEDS, REGIONS
 from .fetcher import Fetcher
 from .store import DISPLAY_HOURS, RETENTION_DAYS, Store
 from .trending import TrendingEngine
@@ -69,8 +69,9 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
             "window_hours": DISPLAY_HOURS,
             "retention_days": RETENTION_DAYS,
             "categories": CATEGORIES,
-            "sources": [{"id": f.id, "name": f.name, "category": f.category, "source_class": f.source_class}
-                        for f in FEEDS],
+            "regions": REGIONS,
+            "sources": [{"id": f.id, "name": f.name, "category": f.category, "source_class": f.source_class,
+                         "region": f.region} for f in FEEDS],
             "total": store.count(hours=DISPLAY_HOURS),
             "stored": store.count(),
             "last_refresh": store.last_refresh,

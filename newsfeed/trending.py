@@ -94,7 +94,7 @@ def _story_payload(headline: str, summary: str, why: str, category: str, momentu
         "source_count": len({i.source for i in members}),
         "independent_sources": len(independent),
         "latest": members[0].published,
-        "items": [{"id": i.id, "title": i.title, "url": i.url, "source": i.source,
+        "items": [{"id": i.id, "title": i.title, "url": i.url, "source": i.source, "source_id": i.source_id,
                    "source_class": i.source_class, "published": i.published} for i in members],
     }
 

@@ -29,6 +29,15 @@ GOVERNMENT = "government-advisory"
 INSTITUTIONAL = "institutional"
 COMMUNITY = "community/blog"
 
+# States covered by the Local category; each Local feed carries one of these codes.
+REGIONS = {
+    "GA": "Georgia",
+    "MD": "Maryland",
+    "PA": "Pennsylvania",
+    "VA": "Virginia",
+    "WV": "West Virginia",
+}
+
 
 @dataclass(frozen=True)
 class Feed:
@@ -38,6 +47,7 @@ class Feed:
     category: str
     source_class: str = PUBLISHER
     poll_minutes: int = 15
+    region: str | None = None  # a REGIONS code, for Local feeds
 
 
 FEEDS: tuple[Feed, ...] = (
@@ -81,22 +91,28 @@ FEEDS: tuple[Feed, ...] = (
     Feed("economist-finance", "The Economist", "https://www.economist.com/finance-and-economics/rss.xml", "economy", poll_minutes=30),
     Feed("federal-reserve", "Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", "economy", INSTITUTIONAL, 30),
     Feed("ecb", "European Central Bank", "https://www.ecb.europa.eu/rss/press.html", "economy", INSTITUTIONAL, 30),
-    # Local: newsrooms and community sites for major US metros.
-    # New York
-    Feed("nyt-nyregion", "The New York Times (N.Y.)", "https://rss.nytimes.com/services/xml/rss/nyt/NYRegion.xml", "local"),
-    Feed("gothamist", "Gothamist", "https://gothamist.com/feed", "local"),
-    Feed("eater-ny", "Eater NY", "https://ny.eater.com/rss/index.xml", "local", poll_minutes=30),
-    # Los Angeles
-    Feed("latimes-california", "Los Angeles Times", "https://www.latimes.com/california/rss2.0.xml", "local"),
-    Feed("eater-la", "Eater LA", "https://la.eater.com/rss/index.xml", "local", poll_minutes=30),
-    # Chicago
-    Feed("block-club-chicago", "Block Club Chicago", "https://blockclubchicago.org/feed/", "local"),
-    # Houston
-    Feed("houston-public-media", "Houston Public Media", "https://www.houstonpublicmedia.org/feed/", "local"),
-    Feed("houston-landing", "Houston Landing", "https://houstonlanding.org/feed/", "local", poll_minutes=30),
-    # Washington, DC
-    Feed("washington-city-paper", "Washington City Paper", "https://washingtoncitypaper.com/feed/", "local", poll_minutes=30),
-    Feed("washingtonian", "Washingtonian", "https://www.washingtonian.com/feed/", "local", poll_minutes=30),
+    # Local, by state: the States Newsroom statehouse outlet, nonprofit and
+    # independent newsrooms, and community sites.
+    # Georgia
+    Feed("georgia-recorder", "Georgia Recorder", "https://georgiarecorder.com/feed/", "local", region="GA"),
+    Feed("rough-draft-atlanta", "Rough Draft Atlanta", "https://roughdraftatlanta.com/feed/", "local", region="GA"),
+    Feed("atlanta-civic-circle", "Atlanta Civic Circle", "https://atlantaciviccircle.org/feed/", "local", poll_minutes=30, region="GA"),
+    # Maryland
+    Feed("maryland-matters", "Maryland Matters", "https://marylandmatters.org/feed/", "local", region="MD"),
+    Feed("baltimore-sun", "The Baltimore Sun", "https://www.baltimoresun.com/feed/", "local", region="MD"),
+    Feed("baltimore-brew", "Baltimore Brew", "https://baltimorebrew.com/feed/", "local", poll_minutes=30, region="MD"),
+    # Pennsylvania
+    Feed("pa-capital-star", "Pennsylvania Capital-Star", "https://penncapital-star.com/feed/", "local", region="PA"),
+    Feed("spotlight-pa", "Spotlight PA", "https://www.spotlightpa.org/feeds/full.xml", "local", region="PA"),
+    Feed("billy-penn", "Billy Penn", "https://billypenn.com/feed/", "local", poll_minutes=30, region="PA"),
+    Feed("publicsource", "PublicSource", "https://www.publicsource.org/feed/", "local", poll_minutes=30, region="PA"),
+    # Virginia
+    Feed("virginia-mercury", "Virginia Mercury", "https://virginiamercury.com/feed/", "local", region="VA"),
+    Feed("cardinal-news", "Cardinal News", "https://cardinalnews.org/feed/", "local", region="VA"),
+    # West Virginia
+    Feed("west-virginia-watch", "West Virginia Watch", "https://westvirginiawatch.com/feed/", "local", region="WV"),
+    Feed("mountain-state-spotlight", "Mountain State Spotlight", "https://mountainstatespotlight.org/feed/", "local", region="WV"),
+    Feed("wv-metronews", "WV MetroNews", "https://wvmetronews.com/feed/", "local", region="WV"),
     # Blogs: independent writers. They post a few times a week at most, so 30 minutes is plenty.
     # Tech and AI
     Feed("simon-willison", "Simon Willison", "https://simonwillison.net/atom/everything/", "blogs", poll_minutes=30),

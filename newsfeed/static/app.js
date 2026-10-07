@@ -9,7 +9,7 @@ const FIRST_PARTY = new Set(["official-lab", "vendor-security", "government-advi
 const EXT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 
 const $ = (sel) => document.querySelector(sel);
-const state = { view: "trending", category: "", q: "", hours: 72, sources: new Set(), sort: "newest", hasImage: false, offset: 0 };
+const state = { view: "trending", category: "", region: "", q: "", hours: 72, sources: new Set(), sort: "newest", hasImage: false, offset: 0 };
 let meta = null;
 let trendingTimer = null;
 let counts = null; // per-category totals for the current filters, once loaded
@@ -80,6 +80,7 @@ function readHash() {
   state.view = p.get("view") === "latest" || (legacyTab && legacyTab !== "trending") ? "latest" : "trending";
   const cat = p.get("cat") || legacyTab;
   state.category = meta?.categories[cat] ? cat : "";
+  state.region = state.category === "local" && meta?.regions?.[p.get("state")] ? p.get("state") : "";
   state.q = p.get("q") || "";
   state.hours = allowedHours().includes(+p.get("hours")) ? +p.get("hours") : 72;
   state.sources = new Set((p.get("sources") || "").split(",").filter(Boolean));
@@ -91,6 +92,7 @@ function writeHash() {
   const p = new URLSearchParams();
   if (state.view !== "trending") p.set("view", state.view);
   if (state.category) p.set("cat", state.category);
+  if (state.region) p.set("state", state.region);
   if (state.q) p.set("q", state.q);
   if (state.hours !== 72) p.set("hours", state.hours);
   if (state.sources.size) p.set("sources", [...state.sources].join(","));
@@ -101,7 +103,7 @@ function writeHash() {
 }
 
 function filtersActive() {
-  return state.category || state.q || state.hours !== 72 || state.sources.size || state.sort !== "newest" || state.hasImage;
+  return state.category || state.region || state.q || state.hours !== 72 || state.sources.size || state.sort !== "newest" || state.hasImage;
 }
 
 // ---- chrome ----------------------------------------------------------------
@@ -119,6 +121,23 @@ function renderTabs(counts) {
 }
 
 // Category dropdown: item counts in Latest, story counts in Trending.
+// Feed ids for the chosen state (Local only); null when no state is chosen.
+function regionSources() {
+  if (state.category !== "local" || !state.region) return null;
+  return new Set(meta.sources.filter((s) => s.region === state.region).map((s) => s.id));
+}
+
+function renderRegion() {
+  const wrap = $("#region-wrap");
+  wrap.hidden = state.category !== "local" || !meta.regions || !Object.keys(meta.regions).length;
+  if (wrap.hidden) return;
+  const select = $("#region");
+  select.replaceChildren(
+    el("option", { value: "", text: "All states" }),
+    ...Object.entries(meta.regions).map(([code, name]) => el("option", { value: code, text: name })));
+  select.value = state.region;
+}
+
 function renderCategory() {
   const select = $("#category");
   let tally = counts;
@@ -172,6 +191,7 @@ function syncControls() {
   $("#clear").hidden = !filtersActive();
   $("#filters").classList.toggle("is-trending", state.view === "trending");
   renderCategory();
+  renderRegion();
   const n = state.sources.size;
   $("#sources-label").textContent = n === 0 ? "All sources" : n === 1
     ? meta.sources.find((s) => state.sources.has(s.id))?.name ?? "1 source" : `${n} sources`;
@@ -225,7 +245,12 @@ async function loadFeed(append = false) {
   const params = new URLSearchParams({ hours: state.hours, sort: state.sort, limit: PAGE_SIZE, offset: state.offset });
   if (state.category) params.set("category", state.category);
   if (state.q) params.set("q", state.q);
-  if (state.sources.size) params.set("sources", [...state.sources].join(","));
+  // A chosen state narrows the source filter to that state's feeds.
+  const inRegion = regionSources();
+  let sources = [...state.sources];
+  if (inRegion) sources = sources.length ? sources.filter((id) => inRegion.has(id)) : [...inRegion];
+  if (inRegion && !sources.length) sources = ["none"]; // picked sources are all outside the state
+  if (sources.length) params.set("sources", sources.join(","));
   if (state.hasImage) params.set("has_image", "true");
 
   let data;
@@ -326,14 +351,16 @@ function renderTrending() {
     sub.append(el("span", { class: "next-ai", text: `Next AI update after ${when}` }));
   }
 
-  const stories = data.stories.filter((s) => !state.category || s.category === state.category);
+  const inRegion = regionSources();
+  const stories = data.stories.filter((s) => (!state.category || s.category === state.category)
+    && (!inRegion || s.items.some((it) => inRegion.has(it.source_id))));
   const pending = data.running || !data.generated_at;
   if (stories.length) {
     const aiWritten = data.mode === "ai" || data.mode === "claude";
     box.replaceChildren(...stories.map((s, i) => story(s, i + 1, aiWritten)));
   } else if (data.stories.length) {
     box.replaceChildren(el("div", { class: "empty" },
-      el("h3", { text: `Nothing trending in ${meta.categories[state.category]}` }),
+      el("h3", { text: `Nothing trending in ${inRegion ? meta.regions[state.region] : meta.categories[state.category]}` }),
       el("p", { text: "Pick another category, or check back as coverage builds." })));
   } else {
     box.replaceChildren(el("div", { class: "empty" },
@@ -368,6 +395,14 @@ function wire() {
   });
   $("#category").addEventListener("change", (e) => {
     state.category = e.target.value;
+    if (state.category !== "local") state.region = "";
+    state.offset = 0;
+    writeHash();
+    syncControls();
+    if (state.view === "trending") { if (trendingData) renderTrending(); } else loadFeed();
+  });
+  $("#region").addEventListener("change", (e) => {
+    state.region = e.target.value;
     state.offset = 0;
     writeHash();
     syncControls();
@@ -376,7 +411,7 @@ function wire() {
   $("#sort").addEventListener("change", (e) => { state.sort = e.target.value; state.offset = 0; changed(); });
   $("#has-image").addEventListener("change", (e) => { state.hasImage = e.target.checked; state.offset = 0; changed(); });
   $("#clear").addEventListener("click", () => {
-    Object.assign(state, { category: "", q: "", hours: 72, sort: "newest", hasImage: false, offset: 0 });
+    Object.assign(state, { category: "", region: "", q: "", hours: 72, sort: "newest", hasImage: false, offset: 0 });
     state.sources.clear();
     renderSourcesPanel();
     changed();

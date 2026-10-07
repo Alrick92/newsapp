@@ -103,3 +103,17 @@ def test_api_in_demo_mode(monkeypatch):
         assert client.get("/healthz").json()["ok"] is True
         assert "Newsfeed" in client.get("/").text
         assert client.get("/static/app.js").status_code == 200
+
+
+def test_local_feeds_are_tagged_by_state(monkeypatch):
+    from newsfeed.feeds import FEEDS, REGIONS
+    assert set(REGIONS) == {"GA", "MD", "PA", "VA", "WV"}
+    for feed in FEEDS:
+        assert (feed.region in REGIONS) == (feed.category == "local"), feed.id
+    monkeypatch.setenv("NEWSFEED_DISABLE_AI", "1")
+    with TestClient(create_app(demo=True)) as client:
+        meta = client.get("/api/meta").json()
+        assert meta["regions"]["WV"] == "West Virginia"
+        md = [s["id"] for s in meta["sources"] if s["region"] == "MD"]
+        found = client.get("/api/items", params={"category": "local", "sources": ",".join(md)}).json()
+        assert found["total"] and {i["source"] for i in found["items"]} <= {"Maryland Matters", "The Baltimore Sun", "Baltimore Brew"}
