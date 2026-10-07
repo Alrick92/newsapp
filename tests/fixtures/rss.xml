@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Sample World</title>
+    <link>https://news.example.org/world</link>
+    <item>
+      <title>Leaders meet for &lt;b&gt;climate&lt;/b&gt; talks</title>
+      <link>https://www.news.example.org/world/climate-talks/?utm_source=rss&amp;utm_medium=feed&amp;id=7</link>
+      <description><![CDATA[<p>Delegates gathered on <strong>Monday</strong> for the summit.</p>]]></description>
+      <pubDate>{RECENT}</pubDate>
+      <media:thumbnail url="https://img.example.org/small.jpg" width="240" height="135"/>
+      <media:content url="https://img.example.org/large.jpg" medium="image" width="1024" height="576"/>
+    </item>
+    <item>
+      <title>Inline image story</title>
+      <link>https://news.example.org/world/inline</link>
+      <description><![CDATA[<img src="/images/inline.png" alt=""> Text after image.]]></description>
+      <pubDate>{RECENT}</pubDate>
+    </item>
+    <item>
+      <title>Enclosure story</title>
+      <link>https://news.example.org/world/enclosure</link>
+      <description>Plain text summary.</description>
+      <enclosure url="https://img.example.org/enc.jpg" type="image/jpeg" length="1000"/>
+      <pubDate>{RECENT}</pubDate>
+    </item>
+    <item>
+      <title>Old story</title>
+      <link>https://news.example.org/world/old</link>
+      <description>From last week.</description>
+      <pubDate>{OLD}</pubDate>
+    </item>
+    <item>
+      <title></title>
+      <link>https://news.example.org/world/untitled</link>
+    </item>
+  </channel>
+</rss>

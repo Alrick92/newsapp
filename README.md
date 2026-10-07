@@ -1,0 +1,104 @@
+# Newsfeed
+
+A news aggregator for the last 72 hours of world, AI, technology and security
+headlines. Claude groups the window's stories into trending events. The UI
+shows tabbed card grids (image, title, description, URL) in Anthropic's
+palette and type.
+
+```bash
+cd newsfeed
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...      # optional; enables Claude trending
+python -m newsfeed                       # http://127.0.0.1:8000
+python -m newsfeed --demo                # offline, fictional sample stories
+```
+
+## What it does
+
+- **26 feeds.** The 15-feed production bundle from the RSS research brief,
+  plus Microsoft Security, CISA, UN News, NPR, The Verge, WIRED (AI and
+  Security), BBC Technology, IEEE Spectrum, Hugging Face and Krebs. They are
+  listed in [`newsfeed/feeds.py`](newsfeed/feeds.py).
+- **Polite polling.** Each feed polls on its own cadence (5, 15 or 30
+  minutes, per the brief) and sends `ETag` / `If-Modified-Since`. A `304`
+  counts as success. Send a descriptive `User-Agent` by setting
+  `NEWSFEED_USER_AGENT` to your own contact URL or email.
+- **72-hour window.** Items older than 72 hours are dropped and pruned.
+- **Deduplication.** URLs are canonicalized: UTM and other tracking
+  parameters, `www.` and trailing slashes are stripped. Identical headlines
+  from different feeds collapse to the earliest copy.
+- **Images.** Taken from `media:content` (widest wins), `media:thumbnail`,
+  image enclosures, or the first `<img>` in the summary. For items with no
+  image, the server fetches the article's `og:image` for up to 40 items per
+  refresh (`NEWSFEED_OG_IMAGE_BUDGET`). Cards with no image get a placeholder
+  in the category's colour.
+- **Filters.** Section tabs, search, a time window (6/12/24/48/72h), sources
+  (multi-select), sort order and "with images only". All filters are stored
+  in the URL hash, so a filtered view can be shared as a link.
+- **Trending tab.** Claude (`claude-opus-5-5`, structured output) clusters
+  up to 400 recent headlines into at most 12 events. Each event gets a
+  headline, summary, "why it's trending", a momentum score and links to
+  every source.
+  - First-party sources (labs, vendors, government, institutions) are labelled
+    and not counted as independent corroboration.
+  - Trending regenerates at most every 30 minutes, and only when the item set
+    has changed (`NEWSFEED_TRENDING_MINUTES`).
+  - The request opts into server-side refusal fallbacks
+    (`fallbacks: "default"`), so security-heavy headlines that trip a safety
+    classifier are re-run on a substitute model instead of returning nothing.
+  - With no API key, or if the call fails, a keyword-overlap clusterer
+    produces the same layout. The UI labels which mode produced the stories.
+
+## API
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/items?category=&sources=a,b&q=&hours=&has_image=&sort=newest\|source&limit=&offset=` | Filtered items plus per-section counts |
+| `GET /api/trending` | Cached trending stories (starts a regeneration if stale) |
+| `POST /api/trending/refresh` | Regenerate trending now |
+| `POST /api/refresh` | Poll every feed now |
+| `GET /api/feeds` | Per-feed health: last success, last error, items in window |
+| `GET /api/meta` | Sections, sources, totals, last refresh |
+
+## Configuration
+
+| Variable | Default | |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | — | Enables Claude trending |
+| `NEWSFEED_MODEL` | `claude-opus-5-5` | Model for trending |
+| `NEWSFEED_TRENDING_MINUTES` | `30` | Minimum gap between regenerations |
+| `NEWSFEED_TRENDING_MAX_ITEMS` | `400` | Newest items sent to the model |
+| `NEWSFEED_DISABLE_AI` | — | `1` forces the keyword clusterer |
+| `NEWSFEED_DATA_DIR` | `data` | Snapshot location; restarts reload from it |
+| `NEWSFEED_OG_IMAGE_BUDGET` | `40` | og:image lookups per refresh (`0` disables) |
+| `NEWSFEED_USER_AGENT` | generic | Identify your deployment to publishers |
+| `HOST` / `PORT` | `127.0.0.1` / `8000` | Bind address |
+
+## Style
+
+The colours are Anthropic's brand palette:
+
+- Ivory backgrounds, Slate text and Clay (`#d97757`) as the accent.
+- Each section has its own accent: Sky for world, Clay for AI, Olive for
+  tech and Fig for security.
+
+The page asks for Anthropic's own typefaces, **Styrene** (sans) and
+**Tiempos Text** (serif). These are commercially licensed, so they are only
+used if they are installed or self-hosted under your own licence. Otherwise
+the page falls back to **Poppins** and **Lora**, the substitutes in
+Anthropic's brand guidelines, which load from Google Fonts. A light and dark
+theme are included.
+
+## Content use
+
+Only the title, the feed's summary, the image URL and the link are stored and
+shown. Full article text is never republished. Some publishers restrict use
+of their feeds (for example, TechCrunch's RSS terms), so check each
+publisher's terms before deploying publicly.
+
+## Tests
+
+```bash
+pip install pytest
+python -m pytest
+```

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Newsfeed</title>
+  <meta name="description" content="The last 72 hours of world, AI, technology and security news, with AI-curated trending stories.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23d97757' d='M12 2.5l1.9 6.1 6.1 1.9-6.1 1.9L12 18.5l-1.9-6.1L4 10.5l6.1-1.9z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script>
+    try { const t = localStorage.getItem("nf-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="masthead__inner">
+      <div class="brand">
+        <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l1.9 6.1 6.1 1.9-6.1 1.9L12 18.5l-1.9-6.1L4 10.5l6.1-1.9z"/></svg>
+        <div>
+          <h1 class="brand__name">Newsfeed</h1>
+          <p class="brand__meta" id="meta">Loading the last 72 hours…</p>
+        </div>
+      </div>
+      <div class="masthead__actions">
+        <span class="badge badge--demo" id="demo-badge" hidden>Demo data</span>
+        <button class="btn btn--ghost" id="refresh" type="button" title="Poll feeds now">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
+          <span>Refresh</span>
+        </button>
+        <button class="btn btn--icon" id="theme" type="button" aria-label="Toggle dark mode">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Sections"></nav>
+  </header>
+
+  <main class="page">
+    <section class="filters" id="filters" aria-label="Filters">
+      <label class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Search headlines and summaries" autocomplete="off">
+      </label>
+      <div class="segmented" id="hours" role="radiogroup" aria-label="Time window"></div>
+      <div class="dropdown" id="sources-dd">
+        <button class="btn btn--ghost dropdown__toggle" type="button" aria-expanded="false" id="sources-btn">
+          <span id="sources-label">All sources</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="dropdown__panel" id="sources-panel" hidden></div>
+      </div>
+      <select id="sort" class="select" aria-label="Sort">
+        <option value="newest">Newest first</option>
+        <option value="source">By source</option>
+      </select>
+      <label class="toggle">
+        <input type="checkbox" id="has-image">
+        <span>With images</span>
+      </label>
+      <button class="btn btn--link" id="clear" type="button" hidden>Clear filters</button>
+    </section>
+
+    <section id="trending-view" class="view" hidden>
+      <div class="trending-head">
+        <div>
+          <h2 class="section-title">Trending now</h2>
+          <p class="section-sub" id="trending-sub"></p>
+        </div>
+        <button class="btn btn--ghost" id="trending-refresh" type="button">Regenerate</button>
+      </div>
+      <div id="trending" class="trending"></div>
+    </section>
+
+    <section id="feed-view" class="view">
+      <p class="result-count" id="count" aria-live="polite"></p>
+      <div id="grid" class="grid"></div>
+      <div class="more"><button class="btn btn--ghost" id="more" type="button" hidden>Load more</button></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Headlines and summaries come from each publisher's public RSS feed. Links open the original article.
+  </footer>
+
+  <template id="card-tpl">
+    <article class="card">
+      <a class="card__media" target="_blank" rel="noopener noreferrer" tabindex="-1"></a>
+      <div class="card__body">
+        <div class="card__meta"><span class="chip"></span><span class="dot">·</span><time></time></div>
+        <h3 class="card__title"><a target="_blank" rel="noopener noreferrer"></a></h3>
+        <p class="card__desc"></p>
+        <a class="card__url" target="_blank" rel="noopener noreferrer"></a>
+      </div>
+    </article>
+  </template>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

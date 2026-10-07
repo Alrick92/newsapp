@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Sample Security Blog</title>
+  <entry>
+    <title>Zero-day patched in widely used library</title>
+    <link rel="alternate" href="https://security.example.org/2026/10/zero-day.html"/>
+    <id>tag:security.example.org,2026:post-1</id>
+    <updated>{RECENT_ISO}</updated>
+    <content type="html">&lt;p&gt;A long and detailed &lt;em&gt;write-up&lt;/em&gt;.&lt;/p&gt;</content>
+  </entry>
+</feed>
