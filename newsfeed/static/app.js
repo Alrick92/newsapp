@@ -315,6 +315,16 @@ function renderTrending() {
   }
   sub.append(data.generated_at ? `Clustered from the last 72 hours · ${timeAgo(data.generated_at)}` : "Analyzing headlines…");
 
+  // AI requests are limited to one per ai_refresh_hours; say when the next one may run.
+  const btn = $("#trending-refresh");
+  const nextAt = data.next_ai_refresh_at ? new Date(data.next_ai_refresh_at * 1000) : null;
+  btn.disabled = Boolean(nextAt) || data.running;
+  btn.title = nextAt ? `The AI refreshes at most every ${data.ai_refresh_hours} hours` : "";
+  if (nextAt) {
+    const when = nextAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    sub.append(el("span", { class: "next-ai", text: `Next AI update after ${when}` }));
+  }
+
   const stories = data.stories.filter((s) => !state.category || s.category === state.category);
   const pending = data.running || !data.generated_at;
   if (stories.length) {

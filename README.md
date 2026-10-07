@@ -87,8 +87,16 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
   every source.
   - First-party sources (labs, vendors, government, institutions) are labelled
     and not counted as independent corroboration.
-  - Trending regenerates at most every 30 minutes, and only when the item set
-    has changed (`NEWSFEED_TRENDING_MINUTES`).
+  - AI requests are throttled to **one every 4 hours**
+    (`NEWSFEED_AI_REFRESH_HOURS`), whatever triggers them: the schedule, the
+    Regenerate button or the header's Refresh button. A failed request still
+    counts. The time of the last request is saved, so restarts don't reset
+    it. Changing the provider or model lifts the wait, so a corrected setting
+    takes effect at once. While throttled, the tab keeps the last stories, the
+    Regenerate button is disabled, and the page shows when the next AI update
+    is allowed. A run also needs new stories since the last one.
+  - Without AI, keyword clustering is free and reruns every 30 minutes
+    (`NEWSFEED_TRENDING_MINUTES`).
   - With no AI configured, or if a request fails, a keyword-overlap clusterer
     produces the same layout. The UI shows which model produced the stories.
 
@@ -192,7 +200,8 @@ the rows they need, so stories aren't held in memory.
 | `OLLAMA_BASE_URL` / `OLLAMA_API_KEY` | — (required for `ollama`) / — | Remote Ollama server; key is sent as a Bearer token |
 | `NEWSFEED_OLLAMA_NUM_CTX` | `32768` | Context window requested from Ollama |
 | `NEWSFEED_AI_TIMEOUT` | `300` / `600` (Ollama) | Seconds per AI request (Anthropic uses the SDK default) |
-| `NEWSFEED_TRENDING_MINUTES` | `30` | Minimum gap between regenerations |
+| `NEWSFEED_AI_REFRESH_HOURS` | `4` | Minimum gap between AI requests (all triggers, survives restarts) |
+| `NEWSFEED_TRENDING_MINUTES` | `30` | Minimum gap between keyword-clustering runs (no AI) |
 | `NEWSFEED_TRENDING_MAX_ITEMS` | `400` (Claude) / `150` | Newest items sent to the model |
 | `NEWSFEED_DISABLE_AI` | — | `1` forces the keyword clusterer (same as provider `none`) |
 | `NEWSFEED_DATA_DIR` | `data` | Folder for `newsfeed.db` |

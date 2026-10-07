@@ -24,7 +24,11 @@ from .store import DISPLAY_HOURS, Store
 
 log = logging.getLogger(__name__)
 
-MIN_INTERVAL = int(os.environ.get("NEWSFEED_TRENDING_MINUTES", "30")) * 60
+# AI requests cost money, so at most one per AI_INTERVAL, whatever triggers it
+# (schedule, Regenerate button, feed refresh). Keyword clustering is free and
+# keeps the shorter HEURISTIC_INTERVAL.
+AI_INTERVAL = float(os.environ.get("NEWSFEED_AI_REFRESH_HOURS") or 4) * 3600
+HEURISTIC_INTERVAL = int(os.environ.get("NEWSFEED_TRENDING_MINUTES") or 30) * 60
 MAX_STORIES = 12
 
 Category = Literal["world", "ai", "tech", "security"]
@@ -173,6 +177,9 @@ class TrendingEngine:
         self._provider = provider
         self._resolved = provider is not None
         self._config_error: str | None = None
+        # {"at": ts, "provider": name, "model": model} of the last AI request sent,
+        # successful or not; persisted so a restart can't skip the wait.
+        self._last_ai = store.get_meta("trending_ai_last_request")
         saved = store.get_meta("trending")
         if saved:  # survive restarts without paying for a fresh AI call
             self.stories, self.generated_at, self.error = saved["stories"], saved["generated_at"], saved.get("error")
@@ -194,24 +201,47 @@ class TrendingEngine:
                 self._config_error = str(exc)
         return self._provider
 
+    def next_ai_at(self) -> float | None:
+        """When the next AI request may be sent; None if one may be sent now (or no AI is configured)."""
+        provider = self._get_provider()
+        last = self._last_ai
+        if not provider or not last:
+            return None
+        if (last.get("provider"), last.get("model")) != (provider.name, provider.model):
+            return None  # provider or model changed (e.g. a fixed config): don't make it wait
+        due = last["at"] + AI_INTERVAL
+        return due if due > time.time() else None
+
     def stale(self) -> bool:
         if self.store.version == self._version:
             return False
-        return self.generated_at is None or time.time() - self.generated_at >= MIN_INTERVAL
+        if self._get_provider():
+            return self.next_ai_at() is None
+        return self.generated_at is None or time.time() - self.generated_at >= HEURISTIC_INTERVAL
 
-    async def update(self, force: bool = False) -> None:
-        if self.running or not (force or self.stale()):
-            return
+    async def update(self, force: bool = False) -> bool:
+        """Regenerate if due. `force` skips the new-stories check but never the AI throttle.
+
+        Returns False when nothing ran (already running, throttled, or not due).
+        """
+        if self.running:
+            return False
+        provider = self._get_provider()
+        if provider and self.next_ai_at() is not None:
+            return False
+        if not (force or self.stale()):
+            return False
         self.running = True
         version = self.store.version
         now = time.time()
-        provider = self._get_provider()
         limit = provider.max_items if provider else 400
         items = self.store.query(now=now, hours=DISPLAY_HOURS, limit=limit)
         try:
             self.error = self._config_error
             self.provider_name = self.model = None
             if provider and items:
+                self._last_ai = {"at": now, "provider": provider.name, "model": provider.model}
+                self.store.set_meta("trending_ai_last_request", self._last_ai)
                 try:
                     self.stories = await ai_trending(items, now, provider)
                     self.mode, self.provider_name, self.model = "ai", provider.name, provider.model
@@ -225,10 +255,14 @@ class TrendingEngine:
             self.store.set_meta("trending", {"stories": self.stories, "mode": self.mode,
                                              "provider": self.provider_name, "model": self.model,
                                              "generated_at": self.generated_at, "error": self.error})
+            return True
         finally:
             self.running = False
 
     def snapshot(self) -> dict:
         return {"mode": self.mode, "provider": self.provider_name, "model": self.model,
                 "generated_at": self.generated_at, "running": self.running,
-                "error": self.error, "stories": self.stories}
+                "error": self.error, "stories": self.stories,
+                "ai_enabled": self._get_provider() is not None,
+                "ai_refresh_hours": AI_INTERVAL / 3600,
+                "next_ai_refresh_at": self.next_ai_at()}

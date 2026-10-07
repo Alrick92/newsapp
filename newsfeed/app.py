@@ -113,8 +113,10 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
 
     @app.post("/api/trending/refresh")
     async def refresh_trending() -> dict:
-        await trending.update(force=True)
-        return trending.snapshot()
+        # Throttled like every other trigger: within the AI window this returns
+        # the current stories with throttled=true and next_ai_refresh_at set.
+        ran = await trending.update(force=True)
+        return {**trending.snapshot(), "throttled": not ran and trending.next_ai_at() is not None}
 
     @app.get("/healthz")
     def healthz() -> dict:

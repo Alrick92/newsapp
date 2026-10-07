@@ -136,7 +136,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .btn--icon:hover { background: var(--surface-2); }
 .btn--link { background: none; color: var(--accent-strong); padding: 0 6px; }
 .btn--link:hover { text-decoration: underline; }
-.btn[disabled] { opacity: .55; cursor: progress; }
+.btn[disabled] { opacity: .55; cursor: not-allowed; }
 .btn.is-spinning svg { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -227,6 +227,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 /* ---- trending ---------------------------------------------------------- */
 .trending-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .section-title { margin: 0; font-family: var(--font-serif); font-weight: 500; font-size: 30px; letter-spacing: -0.01em; }
+.next-ai { flex-basis: 100%; }
 .section-sub { margin: 4px 0 0; color: var(--text-3); font-size: 13px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .trending { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
 .story { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
