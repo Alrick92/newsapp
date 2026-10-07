@@ -6,7 +6,7 @@ shows card grids (image, title, description, URL) with a category dropdown,
 in an "Ink & Teal" newsroom palette with Lora and Poppins type.
 
 ```bash
-cd newsfeed
+git clone https://github.com/Alrick92/newsapp.git && cd newsapp
 pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...      # optional; enables Claude trending
 python -m newsfeed                       # http://127.0.0.1:8000
@@ -20,7 +20,7 @@ The container publishes **no ports**: there is no `ports:` or `expose:` in
 only inside a Docker network it shares with your load balancer.
 
 ```bash
-cd newsfeed
+cd newsapp
 cp .env.example .env            # add ANTHROPIC_API_KEY (optional)
 docker network create lb        # once; or set LB_NETWORK to your LB's network
 docker compose up -d --build

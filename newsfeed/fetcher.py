@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 USER_AGENT = os.environ.get(
     "NEWSFEED_USER_AGENT",
-    "NewsfeedAggregator/1.0 (+https://github.com/alrick92/bot)",
+    "NewsfeedAggregator/1.0 (+https://github.com/alrick92/newsapp)",
 )
 _OG_IMAGE = re.compile(
     r"<meta[^>]+(?:property|name)=[\"'](?:og:image|twitter:image)(?::src)?[\"'][^>]*content=[\"']([^\"']+)[\"']"

@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# runtime data and secrets
+data/
+newsfeed.db*
+*.json.imported
+.env
