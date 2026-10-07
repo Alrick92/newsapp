@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import httpx
 from conftest import NOW
@@ -8,6 +9,8 @@ from newsfeed.fetcher import Fetcher
 from newsfeed.items import Item, parse_feed
 from newsfeed.store import Store
 
+DAY = 86400
+
 
 def make(id, title, hours, source="bbc-world", desc="", image=None):
     feed = FEEDS_BY_ID[source]
@@ -16,64 +19,92 @@ def make(id, title, hours, source="bbc-world", desc="", image=None):
                 source_class=feed.source_class, published=NOW - hours * 3600)
 
 
-def test_window_dedupe_and_prune():
+def ids(store, **kw):
+    kw.setdefault("now", NOW)
+    return [i.id for i in store.query(**kw)]
+
+
+def test_retention_window_and_purge():
     store = Store()
     added = store.add([
         make("a", "Fresh story", 1),
-        make("b", "Edge of window", 71.9),
-        make("c", "Too old", 73),
-        make("d", "Fresh Story!", 3, source="guardian-world"),  # same headline, published earlier: replaces a
-        make("e", "fresh story", 0.5, source="dw-world"),  # same headline, published later: dropped
+        make("b", "Last week", 24 * 7),
+        make("c", "Edge of retention", 24 * 29.99),
+        make("d", "Too old", 24 * 31),
     ], now=NOW)
-    assert added == 2
-    assert set(store.items) == {"d", "b"}
+    assert added == 3
+    assert store.count(now=NOW) == 3
+    assert ids(store) == ["a"]  # default view is the last 72 hours
+    assert ids(store, hours=24 * 30) == ["a", "b", "c"]
     v = store.version
 
-    store.prune(now=NOW + 3600)  # b falls out of the 72h window
-    assert set(store.items) == {"d"}
-    assert store.add([make("d", "Fresh Story!", 3, source="guardian-world")], now=NOW) == 0
-    assert store.version == v  # unchanged by a no-op add
+    assert store.purge(now=NOW + 3600) == 1  # c passes 30 days and is deleted
+    assert ids(store, hours=24 * 30, now=NOW + 3600) == ["a", "b"]
+    assert store.version == v + 1
+    assert store.add([make("a", "Fresh story", 1)], now=NOW + 3600) == 0
 
 
-def test_earlier_duplicate_headline_replaces_later_one():
+def test_headline_dedupe_keeps_earliest_within_48h():
     store = Store()
-    store.add([make("late", "Same headline", 1)], now=NOW)
-    store.add([make("early", "same headline", 5, source="dw-world")], now=NOW)
-    assert set(store.items) == {"early"}
+    assert store.add([
+        make("late", "Same headline", 1),
+        make("early", "same headline!", 5, source="dw-world"),  # earlier copy replaces the later one
+        make("later", "Same Headline", 0.5, source="npr-world"),  # later copy is dropped
+        make("weekly", "Same headline", 24 * 5, source="guardian-world"),  # days apart: a distinct story
+    ], now=NOW) == 2
+    assert ids(store, hours=24 * 30) == ["early", "weekly"]
 
 
-def test_query_filters():
+def test_query_filters_and_paging():
     store = Store()
     store.add([
-        make("w1", "Summit opens", 1, desc="talks on trade"),
+        make("w1", "Summit opens", 1, desc="talks on trade 100%"),
         make("w2", "Election recount", 30, image="https://img/x.jpg"),
         make("s1", "Ransomware hits hospital", 2, source="bleepingcomputer"),
     ], now=NOW)
-    ids = lambda **kw: [i.id for i in store.query(now=NOW, **kw)]
-    assert ids() == ["w1", "s1", "w2"]
-    assert ids(category="security") == ["s1"]
-    assert ids(hours=24) == ["w1", "s1"]
-    assert ids(q="TRADE summit") == ["w1"]
-    assert ids(sources={"bleepingcomputer"}) == ["s1"]
-    assert ids(has_image=True) == ["w2"]
-    assert ids(sort="source") == ["w1", "w2", "s1"]  # BBC News < BleepingComputer, then newest
+    assert ids(store) == ["w1", "s1", "w2"]
+    assert ids(store, category="security") == ["s1"]
+    assert ids(store, hours=24) == ["w1", "s1"]
+    assert ids(store, q="TRADE summit") == ["w1"]
+    assert ids(store, q="100%") == ["w1"] and ids(store, q="_") == []  # LIKE wildcards are escaped
+    assert ids(store, sources={"bleepingcomputer"}) == ["s1"]
+    assert ids(store, has_image=True) == ["w2"]
+    assert ids(store, sort="source") == ["w1", "w2", "s1"]  # BBC News < BleepingComputer, then newest
+    total, page = store.search(now=NOW, limit=1, offset=1)
+    assert total == 3 and [i.id for i in page] == ["s1"]
+    assert store.category_counts(now=NOW, category="world") == {"world": 2, "security": 1}
 
 
-def test_snapshot_roundtrip(tmp_path):
-    store = Store(snapshot=tmp_path / "items.json")
+def test_everything_survives_restart(tmp_path):
+    db = tmp_path / "newsfeed.db"
+    store = Store(db)
     store.add([make("a", "Kept", 1)], now=NOW)
     store.last_refresh = NOW
-    store.save()
-    # Loading uses the real clock, so the fixture items are outside the window...
-    fresh = Store(snapshot=tmp_path / "items.json")
-    fresh.load()
-    assert fresh.last_refresh == NOW
-    # ...and a corrupt snapshot is ignored rather than crashing startup.
-    (tmp_path / "items.json").write_text("{not json")
-    Store(snapshot=tmp_path / "items.json").load()
+    store.save_feed_state("bbc-world", etag='"v1"', last_modified=None, last_polled=NOW, last_ok=NOW, last_error=None)
+    store.set_meta("trending", {"stories": [{"headline": "x"}], "mode": "heuristic", "generated_at": NOW})
+    store.close()
+
+    again = Store(db)
+    assert ids(again) == ["a"]
+    assert again.last_refresh == NOW
+    assert again.feed_states()["bbc-world"]["etag"] == '"v1"'
+    assert again.get_meta("trending")["stories"] == [{"headline": "x"}]
 
 
-def test_fetcher_conditional_get_and_og_image(rss_bytes, monkeypatch):
+def test_imports_old_json_snapshot_once(tmp_path):
+    snap = tmp_path / "items.json"
+    snap.write_text(json.dumps({"last_refresh": NOW, "items": [make("a", "Old snapshot story", 1).to_dict()]}))
+    # The fixture clock is in the past relative to the real one; widen retention so the item counts.
+    store = Store(retention_days=3650)
+    assert store.import_json_snapshot(snap) == 1
+    assert not snap.exists() and (tmp_path / "items.json.imported").exists()
+    assert store.import_json_snapshot(snap) == 0
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json")
+    assert store.import_json_snapshot(bad) == 0 and bad.exists()
+
+
+def test_fetcher_conditional_get_and_og_image(rss_bytes, monkeypatch, tmp_path):
     import time as _time
     monkeypatch.setattr(_time, "time", lambda: NOW)
     calls = []
@@ -84,22 +115,27 @@ def test_fetcher_conditional_get_and_og_image(rss_bytes, monkeypatch):
             if request.headers.get("if-none-match") == '"v1"':
                 return httpx.Response(304)
             return httpx.Response(200, content=rss_bytes, headers={"etag": '"v1"'})
-        if request.url.path == "/world/old" or "news.example.org" in request.url.host:
+        if "news.example.org" in request.url.host:
             return httpx.Response(200, html='<html><head><meta property="og:image" content="https://img.example.org/og.jpg"></head>')
         return httpx.Response(500)
 
-    store = Store()
-    fetcher = Fetcher(store, feeds=(FEEDS_BY_ID["bbc-world"], FEEDS_BY_ID["cisa"]))
+    feeds = (FEEDS_BY_ID["bbc-world"], FEEDS_BY_ID["cisa"])
+    store = Store(tmp_path / "newsfeed.db")
+    fetcher = Fetcher(store, feeds=feeds)
     monkeypatch.setattr(fetcher, "_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
 
     summary = asyncio.run(fetcher.refresh(force=True))
-    assert summary["added"] == 3  # the week-old entry is outside the window
+    assert summary["added"] == 4  # the week-old entry is kept now (30-day retention)
     assert fetcher.state["cisa"].last_error  # failure recorded, other feeds unaffected
-    assert all(i.image for i in store.items.values())  # no item lacks an image after og backfill
+    assert all(i.image for i in store.query(hours=24 * 30))  # og:image filled the gaps
+    assert store.missing_images(10) == []
 
-    asyncio.run(fetcher.refresh(force=True))
+    # A new process reuses the saved ETag, so the next poll is a cheap 304.
+    restarted = Fetcher(store, feeds=feeds)
+    monkeypatch.setattr(restarted, "_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    asyncio.run(restarted.refresh(force=True))
     assert ("https://feeds.bbci.co.uk/news/world/rss.xml", '"v1"') in calls
-    assert fetcher.state["bbc-world"].last_error is None
+    assert restarted.state["bbc-world"].last_error is None
 
 
 def test_parse_feed_ignores_garbage():

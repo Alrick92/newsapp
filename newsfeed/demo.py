@@ -74,6 +74,15 @@ _SAMPLES = [
      "Forecasters say temperatures will remain high into next week.", True),
     ("techcrunch-ai", 66, "Developer tools startup launches code-review agent",
      "The agent posts inline suggestions and explains its reasoning.", True),
+    # Older than 72 hours: only visible with the 7d / 30d windows.
+    ("bbc-world", 24 * 4, "Coastal summit opens with fisheries on the agenda",
+     "Delegations arrived for a week of talks expected to focus on shared patrols.", True),
+    ("ars-ai", 24 * 9, "Review: three months with an offline voice assistant",
+     "Battery life and accuracy both surprised us; latency did not.", True),
+    ("bleepingcomputer", 24 * 16, "ExampleVPN ships firmware update for older gateways",
+     "The update closes several medium-severity issues and adds MFA options.", False),
+    ("verge-tech", 24 * 27, "The best budget laptops of the season",
+     "Our picks after testing a dozen machines under the price cap.", True),
 ]
 
 

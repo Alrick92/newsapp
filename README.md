@@ -23,7 +23,9 @@ python -m newsfeed --demo                # offline, fictional sample stories
   minutes, per the brief) and sends `ETag` / `If-Modified-Since`. A `304`
   counts as success. Send a descriptive `User-Agent` by setting
   `NEWSFEED_USER_AGENT` to your own contact URL or email.
-- **72-hour window.** Items older than 72 hours are dropped and pruned.
+- **72-hour view, 30-day archive.** The page shows the last 72 hours by
+  default. Stories are kept in SQLite for 30 days (`NEWSFEED_RETENTION_DAYS`)
+  and deleted automatically after that, so the file stays small.
 - **Deduplication.** URLs are canonicalized: UTM and other tracking
   parameters, `www.` and trailing slashes are stripped. Identical headlines
   from different feeds collapse to the earliest copy.
@@ -34,7 +36,7 @@ python -m newsfeed --demo                # offline, fictional sample stories
   in the category's colour.
 - **Views and filters.** Two tabs, Trending and Latest. A category dropdown
   (All, World & Politics, AI, Technology, Security) with counts works in
-  both views. Latest also has search, a time window (6/12/24/48/72h), sources
+  both views. Latest also has search, a time window (6h, 12h, 24h, 72h, 7d, 30d), sources
   (multi-select), sort order and "with images only". All filters are stored
   in the URL hash, so a filtered view can be shared as a link.
 - **Trending tab.** Claude (`claude-opus-5-5`, structured output) clusters
@@ -51,6 +53,27 @@ python -m newsfeed --demo                # offline, fictional sample stories
   - With no API key, or if the call fails, a keyword-overlap clusterer
     produces the same layout. The UI labels which mode produced the stories.
 
+## Storage
+
+Everything lives in one SQLite file, `data/newsfeed.db`. Requests read only
+the rows they need, so stories aren't held in memory.
+
+| Saved | Effect after a restart |
+|---|---|
+| Stories (title, summary, URL, image, source, time) | Nothing to rebuild; trending and search continue at once |
+| Feed caching details (`ETag` / `Last-Modified`), last success and error | First poll is a cheap "not modified" check, not a full download |
+| Which articles already had an image lookup | Image lookups aren't repeated |
+| Latest trending result | No extra Claude call on restart |
+
+- **Purge:** every refresh deletes stories older than the retention window and
+  hands the space back to the disk.
+- **Duplicate headlines:** identical headlines within 48 hours of each other
+  count as one story; recurring titles further apart are kept separately.
+- **Upgrading:** an `items.json` snapshot from an earlier version is imported
+  once on startup, then renamed to `items.json.imported`.
+- **Deploying:** keep `data/` on a persistent volume, and run a single server
+  process, since the poller runs inside it.
+
 ## API
 
 | Endpoint | Purpose |
@@ -59,8 +82,8 @@ python -m newsfeed --demo                # offline, fictional sample stories
 | `GET /api/trending` | Cached trending stories (starts a regeneration if stale) |
 | `POST /api/trending/refresh` | Regenerate trending now |
 | `POST /api/refresh` | Poll every feed now |
-| `GET /api/feeds` | Per-feed health: last success, last error, items in window |
-| `GET /api/meta` | Sections, sources, totals, last refresh |
+| `GET /api/feeds` | Per-feed health: last success, last error, stories in the last 72h |
+| `GET /api/meta` | Sections, sources, 72h and 30-day totals, last refresh |
 
 ## Configuration
 
@@ -71,7 +94,8 @@ python -m newsfeed --demo                # offline, fictional sample stories
 | `NEWSFEED_TRENDING_MINUTES` | `30` | Minimum gap between regenerations |
 | `NEWSFEED_TRENDING_MAX_ITEMS` | `400` | Newest items sent to the model |
 | `NEWSFEED_DISABLE_AI` | — | `1` forces the keyword clusterer |
-| `NEWSFEED_DATA_DIR` | `data` | Snapshot location; restarts reload from it |
+| `NEWSFEED_DATA_DIR` | `data` | Folder for `newsfeed.db` |
+| `NEWSFEED_RETENTION_DAYS` | `30` | Days to keep stories before purging |
 | `NEWSFEED_OG_IMAGE_BUDGET` | `40` | og:image lookups per refresh (`0` disables) |
 | `NEWSFEED_USER_AGENT` | generic | Identify your deployment to publishers |
 | `HOST` / `PORT` | `127.0.0.1` / `8000` | Bind address |

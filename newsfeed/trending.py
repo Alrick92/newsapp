@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from .feeds import CATEGORIES, PUBLISHER
 from .items import Item
-from .store import Store
+from .store import DISPLAY_HOURS, Store
 
 log = logging.getLogger(__name__)
 
@@ -178,6 +178,11 @@ class TrendingEngine:
         self._version = -1
         self._client: anthropic.AsyncAnthropic | None = None
         self._ai_disabled = os.environ.get("NEWSFEED_DISABLE_AI") == "1"
+        saved = store.get_meta("trending")
+        if saved:  # survive restarts without paying for a fresh Claude call
+            self.stories, self.mode = saved["stories"], saved["mode"]
+            self.generated_at, self.error = saved["generated_at"], saved.get("error")
+            self._version = store.version
 
     def _get_client(self) -> anthropic.AsyncAnthropic | None:
         if self._ai_disabled:
@@ -203,7 +208,7 @@ class TrendingEngine:
         self.running = True
         version = self.store.version
         now = time.time()
-        items = self.store.query(now=now)[:MAX_INPUT_ITEMS]
+        items = self.store.query(now=now, hours=DISPLAY_HOURS, limit=MAX_INPUT_ITEMS)
         try:
             client = self._get_client()
             if client and items:
@@ -217,6 +222,8 @@ class TrendingEngine:
             else:
                 self.stories, self.mode = heuristic_trending(items, now), "heuristic"
             self.generated_at, self._version = time.time(), version
+            self.store.set_meta("trending", {"stories": self.stories, "mode": self.mode,
+                                             "generated_at": self.generated_at, "error": self.error})
         finally:
             self.running = False
 

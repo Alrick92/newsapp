@@ -1,7 +1,8 @@
 "use strict";
 
 const PAGE_SIZE = 60;
-const HOURS = [6, 12, 24, 48, 72];
+const HOURS = [6, 12, 24, 72, 168, 720]; // the API caps this at the retention window
+const hoursLabel = (h) => (h % 24 === 0 && h > 72 ? `${h / 24}d` : `${h}h`);
 const CAT_COLOR = { world: "var(--cat-world)", ai: "var(--cat-ai)", tech: "var(--cat-tech)", security: "var(--cat-security)" };
 const FIRST_PARTY = new Set(["official-lab", "vendor-security", "government-advisory", "institutional"]);
 const SPARK = '<svg class="tab__spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l1.9 6.1 6.1 1.9-6.1 1.9L12 18.5l-1.9-6.1L4 10.5l6.1-1.9z"/></svg>';
@@ -80,7 +81,7 @@ function readHash() {
   const cat = p.get("cat") || legacyTab;
   state.category = meta?.categories[cat] ? cat : "";
   state.q = p.get("q") || "";
-  state.hours = HOURS.includes(+p.get("hours")) ? +p.get("hours") : 72;
+  state.hours = allowedHours().includes(+p.get("hours")) ? +p.get("hours") : 72;
   state.sources = new Set((p.get("sources") || "").split(",").filter(Boolean));
   state.sort = p.get("sort") === "source" ? "source" : "newest";
   state.hasImage = p.get("img") === "1";
@@ -135,9 +136,13 @@ function renderCategory() {
   select.style.setProperty("--cat", state.category ? CAT_COLOR[state.category] : "var(--accent)");
 }
 
+function allowedHours() {
+  return HOURS.filter((h) => !meta || h <= meta.retention_days * 24);
+}
+
 function renderHours() {
-  $("#hours").replaceChildren(...HOURS.map((h) => {
-    const b = el("button", { type: "button", role: "radio", "aria-checked": String(state.hours === h), text: `${h}h` });
+  $("#hours").replaceChildren(...allowedHours().map((h) => {
+    const b = el("button", { type: "button", role: "radio", "aria-checked": String(state.hours === h), text: hoursLabel(h) });
     b.addEventListener("click", () => { state.hours = h; state.offset = 0; changed(); });
     return b;
   }));
@@ -176,7 +181,8 @@ function syncControls() {
 
 function renderMeta() {
   const updated = meta.last_refresh ? `updated ${timeAgo(meta.last_refresh)}` : "waiting for first poll";
-  $("#meta").textContent = `Last ${meta.window_hours} hours · ${meta.total} stories from ${meta.sources.length} feeds · ${updated}`;
+  const archive = meta.stored > meta.total ? ` · ${meta.stored.toLocaleString()} kept for ${meta.retention_days} days` : "";
+  $("#meta").textContent = `Last ${meta.window_hours} hours · ${meta.total.toLocaleString()} stories from ${meta.sources.length} feeds${archive} · ${updated}`;
   $("#demo-badge").hidden = !meta.demo;
 }
 

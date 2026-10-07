@@ -2,6 +2,7 @@
 
 Honors ETag / Last-Modified (a 304 counts as success), polls each feed on its
 own cadence, and backfills missing thumbnails from the article's og:image.
+Per-feed state is persisted in the store so restarts keep conditional GETs.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import logging
 import os
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 import httpx
 
@@ -39,7 +40,6 @@ class FeedState:
     last_polled: float = 0.0
     last_ok: float | None = None
     last_error: str | None = None
-    item_count: int = 0
 
 
 @dataclass
@@ -49,7 +49,10 @@ class Fetcher:
     concurrency: int = 8
     og_image_budget: int = int(os.environ.get("NEWSFEED_OG_IMAGE_BUDGET", "40"))
     state: dict[str, FeedState] = field(default_factory=dict)
-    _og_tried: set[str] = field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        for feed_id, saved in self.store.feed_states().items():
+            self.state[feed_id] = FeedState(**saved)
 
     def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -72,10 +75,12 @@ class Fetcher:
             new_items = [i for batch in batches for i in batch]
             added = self.store.add(new_items, now=time.time())
             await self._backfill_images(client)
+        for feed in due:
+            self.store.save_feed_state(feed.id, **asdict(self.state[feed.id]))
         self.store.last_refresh = time.time()
-        self.store.save()
-        log.info("refresh: polled %d feeds, %d new items, %d in window", len(due), added, len(self.store.items))
-        return {"polled": len(due), "added": added, "total": len(self.store.items)}
+        total = self.store.count()
+        log.info("refresh: polled %d feeds, %d new items, %d stored", len(due), added, total)
+        return {"polled": len(due), "added": added, "total": total}
 
     async def _poll(self, client: httpx.AsyncClient, feed: Feed) -> list[Item]:
         st = self.state.setdefault(feed.id, FeedState())
@@ -98,42 +103,43 @@ class Fetcher:
         st.etag = resp.headers.get("etag")
         st.last_modified = resp.headers.get("last-modified")
         items = parse_feed(resp.content, feed, now=time.time())
-        st.last_ok, st.last_error, st.item_count = time.time(), None, len(items)
+        st.last_ok, st.last_error = time.time(), None
         return items
 
     async def _backfill_images(self, client: httpx.AsyncClient) -> None:
         """Fetch og:image for the newest image-less items, within a per-refresh budget."""
         if self.og_image_budget <= 0:
             return
-        todo = [i for i in sorted(self.store.items.values(), key=lambda i: -i.published)
-                if not i.image and i.id not in self._og_tried][: self.og_image_budget]
+        todo = self.store.missing_images(self.og_image_budget)
         sem = asyncio.Semaphore(6)
 
-        async def one(item: Item) -> None:
-            self._og_tried.add(item.id)
+        async def one(item: Item) -> str | None:
             async with sem:
                 try:
                     async with client.stream("GET", item.url, headers={"Accept": "text/html"}) as resp:
                         if resp.status_code != 200:
-                            return
+                            return None
                         head = b""
                         async for chunk in resp.aiter_bytes():
                             head += chunk
                             if len(head) > 96_000 or b"</head>" in head:
                                 break
                 except httpx.HTTPError:
-                    return
+                    return None
             match = _OG_IMAGE.search(head.decode("utf-8", "ignore"))
-            if match:
-                url = match.group(1) or match.group(2)
-                if url.startswith("//"):
-                    url = "https:" + url
-                if url.startswith("http"):
-                    item.image = url
+            if not match:
+                return None
+            url = match.group(1) or match.group(2)
+            if url.startswith("//"):
+                url = "https:" + url
+            return url if url.startswith("http") else None
 
-        await asyncio.gather(*(one(i) for i in todo))
+        images = await asyncio.gather(*(one(i) for i in todo))
+        for item, image in zip(todo, images):
+            self.store.set_image(item.id, image)
 
     def status(self) -> list[dict]:
+        counts = self.store.source_counts()
         out = []
         for feed in self.feeds:
             st = self.state.get(feed.id, FeedState())
@@ -141,6 +147,6 @@ class Fetcher:
                 "id": feed.id, "name": feed.name, "category": feed.category,
                 "source_class": feed.source_class, "url": feed.url,
                 "last_ok": st.last_ok, "last_error": st.last_error,
-                "items_in_window": sum(1 for i in self.store.items.values() if i.source_id == feed.id),
+                "items_last_72h": counts.get(feed.id, 0),
             })
         return out
