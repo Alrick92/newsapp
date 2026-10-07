@@ -18,7 +18,11 @@ python -m newsfeed --demo                # offline, fictional sample stories
 
 The container publishes **no ports**: there is no `ports:` or `expose:` in
 `compose.yaml` and no `EXPOSE` in the image. The app listens on port 8000
-only inside a Docker network it shares with your load balancer.
+only on an **internal** Docker network (`lb`) that it shares with your load
+balancer. Docker gives an internal network no route to or from the outside,
+so the load balancer is the only way in. Outbound traffic to the feed sites
+and your AI endpoint uses a second private network (`egress`), which accepts
+no inbound connections.
 
 ```bash
 cd newsapp
@@ -32,8 +36,9 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
 - **Load balancer setup:** the load balancer must be a container (Traefik,
   nginx, HAProxy, Caddy, …) attached to the same network, which is `lb`
   unless you set `LB_NETWORK`. If that network doesn't exist yet, `up`
-  creates it. If it does exist (for example the network your proxy or hosting
-  panel already uses), the app joins it. A load balancer outside Docker, such as a cloud
+  creates it as an internal network. If it does exist (for example the
+  network your proxy or hosting panel already uses), the app joins it and that
+  network keeps its own settings. A load balancer outside Docker, such as a cloud
   load balancer, can't reach the container without a published port.
 - **Visitor addresses:** `X-Forwarded-For` / `X-Forwarded-Proto` from the load
   balancer are trusted, so logs show real client addresses. To trust only
