@@ -6,7 +6,7 @@ import calendar
 import hashlib
 import html
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 import feedparser
@@ -14,6 +14,9 @@ import feedparser
 from .feeds import Feed
 
 DESCRIPTION_LIMIT = 320
+# Full feed text kept for search and summaries (never shown in full; links go to
+# the publisher). Long-form feeds are cut here to keep the database small.
+CONTENT_LIMIT = 20_000
 
 _TRACKING_PARAMS = re.compile(r"^(utm_\w+|fbclid|gclid|mc_cid|mc_eid|ref|cmpid|ito|at_\w+)$", re.I)
 _TAG = re.compile(r"<[^>]+>")
@@ -35,9 +38,20 @@ class Item:
     category: str
     source_class: str
     published: float  # unix seconds, UTC
+    guid: str | None = None  # the feed's own id for the entry, when it gives one
+    content: str = ""  # full feed text, plain; not sent to the page
+    content_len: int = 0  # length of content when it wasn't loaded
+    read_at: float | None = None
+    starred_at: float | None = None
+    summary: str | None = None
+    also: list[dict] = field(default_factory=list)  # the same story from other feeds
+    snippet: str | None = None  # search hit context, with \x02...\x03 around matches
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        data["content_len"] = len(self.content) or self.content_len
+        del data["content"]
+        return data
 
 
 def canonicalize_url(url: str) -> str:
@@ -110,7 +124,9 @@ def parse_feed(raw: bytes, feed: Feed, now: float) -> list[Item]:
         if not link or not title or not link.startswith("http"):
             continue
         url = canonicalize_url(link)
-        summary = entry.get("summary") or next((c.get("value", "") for c in entry.get("content", []) or []), "")
+        bodies = [c.get("value", "") for c in entry.get("content", []) or []]
+        summary = entry.get("summary") or next(iter(bodies), "")
+        full = max([*bodies, entry.get("summary") or ""], key=len)
         published = _entry_timestamp(entry) or now
         items.append(Item(
             id=hashlib.sha1(url.encode()).hexdigest()[:16],
@@ -123,5 +139,7 @@ def parse_feed(raw: bytes, feed: Feed, now: float) -> list[Item]:
             category=feed.category,
             source_class=feed.source_class,
             published=min(published, now),  # clamp future-dated entries
+            guid=(entry.get("id") or "").strip() or None,
+            content=clean_text(full, limit=CONTENT_LIMIT),
         ))
     return items

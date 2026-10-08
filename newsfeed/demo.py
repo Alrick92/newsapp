@@ -135,6 +135,23 @@ def _art(seed: str) -> str:
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
 
 
+# A full-length (fictional) body for one sample, so demo mode shows the summary button.
+_BODIES = {
+    "Federal Reserve holds policy rate steady at June meeting": (
+        "The Federal Open Market Committee voted to keep the target range for the federal funds rate "
+        "unchanged at its June meeting, the third consecutive hold. In its statement, the committee said "
+        "inflation had eased over the past year but remained above its 2 percent goal, and that job gains "
+        "had moderated while the unemployment rate stayed low. Officials repeated that they do not expect "
+        "to cut rates until they have greater confidence that inflation is moving sustainably toward target. "
+        "Updated projections released alongside the decision showed most participants now expect fewer cuts "
+        "this year than they did in March, with the median forecast pointing to a single reduction. The chair "
+        "told reporters that recent data had been encouraging but that the committee would take a "
+        "patient approach, adding that policy decisions would continue to be made meeting by meeting. "
+        "Markets had largely expected the hold; Treasury yields edged lower after the statement."
+    ),
+}
+
+
 def demo_items(now: float) -> list[Item]:
     items = []
     for n, (feed_id, hours, title, desc, has_image) in enumerate(_SAMPLES):
@@ -144,5 +161,6 @@ def demo_items(now: float) -> list[Item]:
             id=hashlib.sha1(url.encode()).hexdigest()[:16], title=title, description=desc, url=url,
             image=_art(title) if has_image else None, source_id=feed.id, source=feed.name,
             category=feed.category, source_class=feed.source_class, published=now - hours * 3600 - n * 97,
+            content=_BODIES.get(title, ""),
         ))
     return items

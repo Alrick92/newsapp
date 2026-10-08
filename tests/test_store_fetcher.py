@@ -25,7 +25,7 @@ def ids(store, **kw):
 
 
 def test_retention_window_and_purge():
-    store = Store()
+    store = Store(retention_days=30)
     added = store.add([
         make("a", "Fresh story", 1),
         make("b", "Last week", 24 * 7),
@@ -44,15 +44,17 @@ def test_retention_window_and_purge():
     assert store.add([make("a", "Fresh story", 1)], now=NOW + 3600) == 0
 
 
-def test_headline_dedupe_keeps_earliest_within_48h():
+def test_headline_duplicates_become_extra_sources_of_one_story():
     store = Store()
     assert store.add([
         make("late", "Same headline", 1),
-        make("early", "same headline!", 5, source="dw-world"),  # earlier copy replaces the later one
-        make("later", "Same Headline", 0.5, source="npr-world"),  # later copy is dropped
+        make("early", "same headline!", 5, source="dw-world"),  # another feed: recorded as a source
+        make("again", "Same Headline", 0.5, source="dw-world"),  # that feed again: ignored
         make("weekly", "Same headline", 24 * 5, source="guardian-world"),  # days apart: a distinct story
     ], now=NOW) == 2
-    assert ids(store, hours=24 * 30) == ["early", "weekly"]
+    assert ids(store, hours=24 * 30) == ["late", "weekly"]
+    [story] = store.query(now=NOW, sources={"bbc-world"})
+    assert [a["source"] for a in story.also] == ["DW"]
 
 
 def test_query_filters_and_paging():
@@ -65,14 +67,15 @@ def test_query_filters_and_paging():
     assert ids(store) == ["w1", "s1", "w2"]
     assert ids(store, category="security") == ["s1"]
     assert ids(store, hours=24) == ["w1", "s1"]
-    assert ids(store, q="TRADE summit") == ["w1"]
-    assert ids(store, q="100%") == ["w1"] and ids(store, q="_") == []  # LIKE wildcards are escaped
+    assert ids(store, q="TRADE summit") == ["w1"]  # full-text search over title and text
+    assert ids(store, q="100%") == ["w1"] and ids(store, q="_") == []  # punctuation can't break the query
     assert ids(store, sources={"bleepingcomputer"}) == ["s1"]
     assert ids(store, has_image=True) == ["w2"]
     assert ids(store, sort="source") == ["w1", "w2", "s1"]  # BBC News < BleepingComputer, then newest
     total, page = store.search(now=NOW, limit=1, offset=1)
     assert total == 3 and [i.id for i in page] == ["s1"]
-    assert store.category_counts(now=NOW, category="world") == {"world": 2, "security": 1}
+    totals, unread = store.category_counts(now=NOW, category="world")
+    assert totals == {"world": 2, "security": 1} and unread == totals
 
 
 def test_everything_survives_restart(tmp_path):

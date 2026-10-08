@@ -9,20 +9,35 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 
 from .feeds import DEFAULT, FeedList, default_opml_path
 from .fetcher import Fetcher
 from .opml import write_opml
 from .store import DISPLAY_HOURS, RETENTION_DAYS, Store
+from .summaries import Summarizer, SummaryError
 from .trending import TrendingEngine
 
 log = logging.getLogger(__name__)
 
 STATIC = Path(__file__).parent / "static"
 TICK_SECONDS = 60
+
+
+class ReadState(BaseModel):
+    read: bool = True
+
+
+class StarState(BaseModel):
+    starred: bool = True
+
+
+class BulkRead(BaseModel):
+    ids: list[str] = Field(max_length=5000)
+    read: bool = True
 
 
 def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: Path | None = None) -> FastAPI:
@@ -39,6 +54,7 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
 
     fetcher = Fetcher(store, feed_list=feed_list) if feed_list else Fetcher(store)
     trending = TrendingEngine(store, categories=lambda: catalog().categories)
+    summarizer = Summarizer(store, trending.provider)
 
     async def loop() -> None:
         while True:
@@ -82,31 +98,73 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
             "sources": [{"id": f.id, "name": f.name, "category": f.category, "source_class": f.source_class,
                          "region": f.region} for f in cat.feeds],
             "feed_list_error": feed_list.error if feed_list else None,
+            "summaries_enabled": summarizer.enabled,
+            "starred": store.starred_count(),
             "total": store.count(hours=DISPLAY_HOURS),
             "stored": store.count(),
             "last_refresh": store.last_refresh,
             "demo": demo,
         }
 
+    def list_filters(category, sources, q, hours, has_image, unread, starred) -> dict:
+        return dict(category=category or None, sources={s for s in (sources or "").split(",") if s} or None,
+                    q=q or None, hours=hours, has_image=has_image, unread=unread, starred=starred)
+
     @app.get("/api/items")
     def items(
         category: str | None = None,
         sources: str | None = Query(None, description="Comma-separated feed ids"),
-        q: str | None = None,
+        q: str | None = Query(None, description="Full-text search over titles and feed text"),
         hours: float = Query(DISPLAY_HOURS, gt=0, le=RETENTION_DAYS * 24),
         has_image: bool = False,
-        sort: str = Query("newest", pattern="^(newest|source)$"),
+        unread: bool = False,
+        starred: bool = Query(False, description="Starred items of any age"),
+        sort: str = Query("newest", pattern="^(newest|source|relevance)$"),
         limit: int = Query(60, ge=1, le=500),
         offset: int = Query(0, ge=0),
     ) -> dict:
-        source_set = {s for s in (sources or "").split(",") if s} or None
-        filters = dict(sources=source_set, q=q, hours=hours, has_image=has_image)
-        total, page = store.search(category=category or None, sort=sort, limit=limit, offset=offset, **filters)
+        filters = list_filters(category, sources, q, hours, has_image, unread, starred)
+        total, page = store.search(sort=sort, limit=limit, offset=offset, **filters)
+        totals, unread_counts = store.category_counts(**filters)
         return {
             "total": total,
-            "counts": store.category_counts(**filters),
-            "items": [i.to_dict() for i in page],
+            "counts": totals,
+            "unread_counts": unread_counts,
+            "items": [{**i.to_dict(), "summarizable": summarizer.can_summarize(i.content_len)} for i in page],
         }
+
+    @app.post("/api/items/{item_id}/read")
+    def mark_read(item_id: str, body: ReadState = Body(default_factory=ReadState)) -> dict:
+        return {"changed": store.set_read([item_id], body.read)}
+
+    @app.post("/api/items/read")
+    def bulk_read(body: BulkRead) -> dict:
+        """Set read state for many items at once (also used to undo "mark all read")."""
+        return {"changed": store.set_read(body.ids, body.read)}
+
+    @app.post("/api/items/mark-all-read")
+    def mark_all_read(
+        category: str | None = None, sources: str | None = None, q: str | None = None,
+        hours: float = Query(DISPLAY_HOURS, gt=0, le=RETENTION_DAYS * 24), has_image: bool = False,
+        starred: bool = False,
+    ) -> dict:
+        """Mark everything matching the list's filters read; returns the ids changed, for undo."""
+        filters = list_filters(category, sources, q, hours, has_image, True, starred)
+        return {"changed": store.set_read(store.ids(**filters), True)}
+
+    @app.post("/api/items/{item_id}/star")
+    def star(item_id: str, body: StarState = Body(default_factory=StarState)) -> dict:
+        if not store.set_starred(item_id, body.starred):
+            raise HTTPException(404, "That story is no longer stored.")
+        return {"starred": body.starred}
+
+    @app.post("/api/items/{item_id}/summary")
+    async def summarize(item_id: str) -> dict:
+        try:
+            summary, cached = await summarizer.summarize(item_id)
+        except SummaryError as exc:
+            raise HTTPException(exc.status, str(exc)) from None
+        return {"summary": summary, "cached": cached}
 
     @app.get("/api/trending")
     async def get_trending() -> dict:

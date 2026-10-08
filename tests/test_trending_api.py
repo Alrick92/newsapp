@@ -93,8 +93,8 @@ def test_api_in_demo_mode(monkeypatch):
         page = client.get("/api/items", params={"limit": 5, "offset": 5}).json()
         assert len(page["items"]) == 5
 
-        assert client.get("/api/items", params={"hours": 24 * 30}).status_code == 200
-        assert client.get("/api/items", params={"hours": 24 * 31}).status_code == 422
+        assert client.get("/api/items", params={"hours": 24 * 90}).status_code == 200
+        assert client.get("/api/items", params={"hours": 24 * 91}).status_code == 422
 
         data = client.post("/api/trending/refresh").json()
         assert data["mode"] == "heuristic" and data["stories"]

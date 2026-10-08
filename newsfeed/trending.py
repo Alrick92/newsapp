@@ -84,14 +84,21 @@ def _render_items(items: list[Item], now: float) -> str:
     for n, item in enumerate(items):
         age = (now - item.published) / 3600
         snippet = item.description[:160]
-        lines.append(f"[{n}] {age:.0f}h | {item.source} ({item.source_class}) | {item.category} | {item.title} — {snippet}")
+        # A story stored once but carried by several feeds lists them all.
+        also = "".join(f", {a['source']} ({a['source_class']})" for a in item.also)
+        lines.append(f"[{n}] {age:.0f}h | {item.source} ({item.source_class}){also} | {item.category} | {item.title} — {snippet}")
     return "\n".join(lines)
 
 
 def _story_payload(headline: str, summary: str, why: str, category: str, momentum: int,
                    members: list[Item]) -> dict:
     members = sorted(members, key=lambda i: -i.published)
-    independent = {i.source for i in members if i.source_class == PUBLISHER}
+    links = [{"id": i.id, "title": i.title, "url": i.url, "source": i.source, "source_id": i.source_id,
+              "source_class": i.source_class, "published": i.published} for i in members]
+    # Other feeds carrying the same story count as sources too.
+    links += [{"id": i.id, "title": i.title, "url": a["url"], "source": a["source"], "source_id": a["source_id"],
+               "source_class": a["source_class"], "published": a["published"]} for i in members for a in i.also]
+    independent = {link["source"] for link in links if link["source_class"] == PUBLISHER}
     return {
         "headline": headline,
         "summary": summary,
@@ -99,11 +106,10 @@ def _story_payload(headline: str, summary: str, why: str, category: str, momentu
         "category": category,
         "momentum": max(1, min(100, momentum)),
         "image": next((i.image for i in members if i.image), None),
-        "source_count": len({i.source for i in members}),
+        "source_count": len({link["source"] for link in links}),
         "independent_sources": len(independent),
         "latest": members[0].published,
-        "items": [{"id": i.id, "title": i.title, "url": i.url, "source": i.source, "source_id": i.source_id,
-                   "source_class": i.source_class, "published": i.published} for i in members],
+        "items": links,
     }
 
 
@@ -158,7 +164,7 @@ def heuristic_trending(items: list[Item], now: float) -> list[dict]:
 
     stories = []
     for _, members in clusters:
-        sources = {i.source for i in members}
+        sources = {i.source for i in members} | {a["source"] for i in members for a in i.also}
         if len(sources) < 2:
             continue
         newest = max(i.published for i in members)
@@ -200,6 +206,10 @@ class TrendingEngine:
             self.provider_name = saved.get("provider") or ("anthropic" if saved["mode"] == "claude" else None)
             self.model = saved.get("model")
             self._version = store.version
+
+    def provider(self) -> Provider | None:
+        """The configured AI provider (shared with per-article summaries)."""
+        return self._get_provider()
 
     def _get_provider(self) -> Provider | None:
         """Resolve NEWSFEED_AI_PROVIDER once; a misconfiguration is reported, not raised."""

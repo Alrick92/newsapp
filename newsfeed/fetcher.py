@@ -74,8 +74,8 @@ class Fetcher:
         if not due:
             # The common case for the once-a-minute check: no network, no HTTPS
             # client (building one loads the CA bundle, ~80 ms of CPU), just
-            # the cheap retention purge.
-            self.store.purge()
+            # the daily prune when it's due.
+            self.store.maybe_purge()
             return {"polled": 0, "added": 0, "total": self.store.count()}
         sem = asyncio.Semaphore(self.concurrency)
         async with self._client() as client:
@@ -85,6 +85,7 @@ class Fetcher:
             batches = await asyncio.gather(*(run(f) for f in due))
             new_items = [i for batch in batches for i in batch]
             added = self.store.add(new_items, now=time.time())
+            self.store.maybe_purge()
             await self._backfill_images(client)
         for feed in due:
             self.store.save_feed_state(feed.id, **asdict(self.state[feed.id]))
