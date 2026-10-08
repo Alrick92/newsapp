@@ -278,8 +278,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 @media (max-width: 760px) {
   .masthead__inner, .tabs, .page, .footer { padding-left: 16px; padding-right: 16px; }
   .brand__name { font-size: 24px; }
-  #refresh span { display: none; }
-  #refresh { width: 36px; padding: 0; justify-content: center; }
+  #refresh span, #install span { display: none; }
+  #refresh, #install { width: 36px; padding: 0; justify-content: center; }
   .grid, .trending { grid-template-columns: 1fr; }
   .story--lead { display: flex; }
   .story--lead .story__media { min-height: 0; aspect-ratio: 16 / 9; }
@@ -332,3 +332,22 @@ kbd {
 }
 @media (hover: none) { .keys { display: none; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+
+/* ---- installed app (PWA) ------------------------------------------------- */
+.offline {
+  max-width: 1240px; margin: 12px auto 0; padding: 10px 14px; border-radius: 10px;
+  background: var(--amber-100); color: var(--ink-900); font-size: 13.5px;
+  margin-inline: max(16px, calc((100% - 1240px) / 2 + 24px));
+}
+@media (display-mode: standalone) {
+  /* Running as an installed app: keep the header clear of the status bar / notch. */
+  .masthead { padding-top: env(safe-area-inset-top, 0px); }
+  .footer { padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+  #install { display: none !important; }
+}
+@media (display-mode: standalone) and (max-width: 760px) {
+  /* Phones in landscape: clear the notch at the sides too. */
+  .masthead__inner, .tabs, .page, .footer {
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+}

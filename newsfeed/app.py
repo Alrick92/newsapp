@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import logging
 import os
 import time
@@ -25,6 +26,16 @@ log = logging.getLogger(__name__)
 
 STATIC = Path(__file__).parent / "static"
 TICK_SECONDS = 60
+
+
+def static_version() -> str:
+    """Hash of the app's static files; changes whenever a deploy changes any of them,
+    which makes browsers install the new service worker and refresh their cache."""
+    digest = hashlib.sha256()
+    for path in sorted(p for p in STATIC.rglob("*") if p.is_file()):
+        digest.update(path.relative_to(STATIC).as_posix().encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:12]
 
 
 class ReadState(BaseModel):
@@ -201,6 +212,19 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
         """The current feed list as OPML, for importing into another reader."""
         return Response(write_opml(catalog()), media_type="text/x-opml; charset=utf-8",
                         headers={"Content-Disposition": 'attachment; filename="newsfeed.opml"'})
+
+    sw_source = (STATIC / "sw.js").read_text().replace("__VERSION__", static_version())
+
+    @app.get("/sw.js")
+    def service_worker() -> Response:
+        # Served from the root so it controls the whole app; never cached by the
+        # browser, so a new deploy is noticed on the next visit.
+        return Response(sw_source, media_type="text/javascript",
+                        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+    @app.get("/manifest.webmanifest")
+    def manifest() -> FileResponse:
+        return FileResponse(STATIC / "manifest.webmanifest", media_type="application/manifest+json")
 
     @app.get("/")
     def index() -> FileResponse:

@@ -51,6 +51,33 @@ private: see [Keep it private](#keep-it-private).
 | `Shift` + `A` | Mark everything in the current view read (with Undo) |
 | `Esc` | Leave the search box |
 
+## Install as an app
+
+Newsfeed is a Progressive Web App: install it and it opens in its own window
+with its own icon, starts instantly, and keeps working offline.
+
+- **Android (Chrome), Windows/macOS/Linux (Chrome, Edge):** use the
+  **Install** button in the header, or the install icon in the address bar.
+- **iPhone and iPad (Safari):** Share → **Add to Home Screen**.
+- **Mac (Safari 17+):** File → **Add to Dock**.
+
+Long-press (or right-click) the icon for shortcuts to Latest, Unread and
+Starred.
+
+**Offline:** the app itself and the last version of each list you opened are
+saved on the device. Offline, a banner says when those stories were saved.
+Marking stories read or starring them still works: the changes are kept on
+the device and sent when you're back online. Article links, summaries,
+search and new stories need a connection. Publisher images aren't saved, so
+offline cards show their placeholder.
+
+**Updates:** a deploy is picked up on the next visit, and the app offers
+**Reload** to switch to the new version.
+
+Installing needs HTTPS, which your load balancer provides (it also works on
+`http://localhost`). Behind a password, the app sends your credentials when it
+loads its manifest, so installing works the same way.
+
 ## Feeds (OPML)
 
 The feed list is an OPML file: folders become categories, and a folder inside
@@ -321,6 +348,7 @@ only the rows they need, so stories aren't held in memory.
 | `POST /api/items/{id}/star` | Body `{"starred": true\|false}` |
 | `POST /api/items/{id}/summary` | Summarize from the feed text (saved; 404 without a provider, 422 for teasers, 429 over the hourly limit) |
 | `GET /export.opml` | The feed list as OPML |
+| `GET /manifest.webmanifest`, `GET /sw.js` | App manifest and service worker (installable app, offline) |
 | `GET /api/trending` | Cached trending stories (starts a regeneration if stale) |
 | `POST /api/trending/refresh` | Regenerate trending now |
 | `POST /api/refresh` | Poll every feed now |

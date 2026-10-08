@@ -90,26 +90,93 @@ function media(container, image, category, label) {
   }
 }
 
+class OfflineError extends Error {}
+
 async function api(path, opts) {
-  const res = await fetch(path, opts);
+  let res;
+  try {
+    res = await fetch(path, opts);
+  } catch {
+    throw new OfflineError("You're offline.");
+  }
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
     try { detail = (await res.json()).detail || detail; } catch {}
     throw new Error(detail);
   }
+  if (!opts?.method) noteOffline(res.headers.get("X-Newsfeed-Offline"));
   return res.json();
+}
+
+// ---- offline ---------------------------------------------------------------
+
+// The service worker marks responses it served from its saved copy.
+function noteOffline(savedAt) {
+  const banner = $("#offline");
+  if (savedAt === null) { if (navigator.onLine) banner.hidden = true; return; }
+  const when = savedAt ? new Date(savedAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : "";
+  banner.textContent = `You're offline. Showing stories saved ${when ? `on ${when}` : "earlier"}; reads and stars sync when you reconnect.`;
+  banner.hidden = false;
+}
+
+// Read/star changes made offline wait here (latest change per item wins) until the connection returns.
+const QUEUE_KEY = "nf-pending";
+function loadQueue() {
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY)) || {}; } catch { return {}; }
+}
+function saveQueue(queue) {
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(queue)); } catch {}
+}
+function queueChange(path, body) {
+  const queue = loadQueue();
+  queue[path] = body;
+  saveQueue(queue);
+}
+// Apply waiting changes to an item loaded from a saved (offline) list.
+function withPending(item) {
+  const queue = loadQueue();
+  const id = encodeURIComponent(item.id);
+  const read = queue[`/api/items/${id}/read`];
+  const star = queue[`/api/items/${id}/star`];
+  if (read) item.read_at = read.read ? item.read_at || Date.now() / 1000 : null;
+  if (star) item.starred_at = star.starred ? item.starred_at || Date.now() / 1000 : null;
+  return item;
+}
+async function flushQueue() {
+  const queue = loadQueue();
+  const paths = Object.keys(queue);
+  if (!paths.length) return 0;
+  let sent = 0;
+  for (const path of paths) {
+    try {
+      await post(path, queue[path]);
+      sent += 1;
+    } catch (err) {
+      if (err instanceof OfflineError) break; // still offline: keep the rest
+      // Rejected (e.g. the story was pruned): nothing to retry.
+    }
+    delete queue[path];
+    saveQueue(queue);
+  }
+  return sent;
+}
+let offlineNoticeShown = false;
+function savedOffline() {
+  if (!offlineNoticeShown) toast("You're offline. Saved on this device; it syncs when you reconnect.");
+  offlineNoticeShown = true;
 }
 
 const post = (path, body) => api(path, {
   method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
 
 let toastTimer = null;
-function toast(text, undo) {
+function toast(text, action, label = "Undo") {
   const box = $("#toast");
   $("#toast-text").textContent = text;
   const btn = $("#toast-undo");
-  btn.hidden = !undo;
-  btn.onclick = undo ? () => { box.hidden = true; undo(); } : null;
+  btn.hidden = !action;
+  btn.textContent = label;
+  btn.onclick = action ? () => { box.hidden = true; action(); } : null;
   box.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { box.hidden = true; }, 7000);
@@ -310,9 +377,11 @@ async function setRead(node, item, read) {
   item.read_at = read ? Date.now() / 1000 : null;
   paintRead(node, item);
   adjustUnread(item.category, read ? -1 : 1);
+  const path = `/api/items/${encodeURIComponent(item.id)}/read`;
   try {
-    await post(`/api/items/${encodeURIComponent(item.id)}/read`, { read });
+    await post(path, { read });
   } catch (err) {
+    if (err instanceof OfflineError) { queueChange(path, { read }); savedOffline(); return; }
     item.read_at = before;
     paintRead(node, item);
     adjustUnread(item.category, read ? 1 : -1);
@@ -324,11 +393,13 @@ async function toggleStar(node, item) {
   const on = !item.starred_at;
   item.starred_at = on ? Date.now() / 1000 : null;
   paintStar(node, item);
+  const path = `/api/items/${encodeURIComponent(item.id)}/star`;
+  const counted = () => { meta.starred = Math.max(0, (meta.starred || 0) + (on ? 1 : -1)); renderTabs(); };
   try {
-    await post(`/api/items/${encodeURIComponent(item.id)}/star`, { starred: on });
-    meta.starred = Math.max(0, (meta.starred || 0) + (on ? 1 : -1));
-    renderTabs();
+    await post(path, { starred: on });
+    counted();
   } catch (err) {
+    if (err instanceof OfflineError) { queueChange(path, { starred: on }); counted(); savedOffline(); return; }
     item.starred_at = on ? null : Date.now() / 1000;
     paintStar(node, item);
     toast(`Couldn't save: ${err.message}`);
@@ -353,11 +424,12 @@ async function summarize(node, item) {
   } catch (err) {
     btn.disabled = false;
     btn.textContent = "Summarize";
-    toast(err.message);
+    toast(err instanceof OfflineError ? "Summaries need a connection." : err.message);
   }
 }
 
 function card(item) {
+  withPending(item);
   const node = $("#card-tpl").content.firstElementChild.cloneNode(true);
   node.dataset.id = item.id;
   node._item = item;
@@ -730,7 +802,48 @@ function wire() {
   window.addEventListener("hashchange", () => { readHash(); render(); });
 }
 
+// ---- installable app -------------------------------------------------------
+
+function setupApp() {
+  if ("serviceWorker" in navigator) {
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("service worker not registered:", err));
+    // A deploy installs a new worker; offer to reload into the new version.
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (hadController) toast("A new version of Newsfeed is ready.", () => location.reload(), "Reload");
+    });
+  }
+  // Chrome, Edge and Android offer installation; Safari uses Share > Add to Home Screen.
+  let deferred = null;
+  const btn = $("#install");
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferred = e;
+    btn.hidden = false;
+  });
+  btn.addEventListener("click", async () => {
+    if (!deferred) return;
+    deferred.prompt();
+    await deferred.userChoice.catch(() => null);
+    deferred = null;
+    btn.hidden = true;
+  });
+  window.addEventListener("appinstalled", () => { btn.hidden = true; });
+
+  window.addEventListener("offline", () => noteOffline(""));
+  window.addEventListener("online", async () => {
+    $("#offline").hidden = true;
+    offlineNoticeShown = false;
+    const sent = await flushQueue();
+    if (sent) toast(`Back online. Synced ${sent} ${sent === 1 ? "change" : "changes"}.`);
+    try { meta = await api("/api/meta"); renderMeta(); } catch {}
+    render();
+  });
+}
+
 async function boot() {
+  setupApp();
+  if (navigator.onLine) flushQueue().catch(() => {});
   meta = await api("/api/meta");
   readHash();
   renderMeta();

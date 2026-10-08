@@ -2,10 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Newsfeed</title>
   <meta name="description" content="A personal news reader: your feeds, unread counts, stars, full-text search and AI-curated trending stories.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f1b2a'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' text-anchor='middle' fill='%23f6f8f9'%3EN%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="/static/icons/favicon-32.png" type="image/png">
+  <!-- Installable app (PWA). use-credentials so the manifest loads behind a password-protected load balancer. -->
+  <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+  <meta name="theme-color" content="#f6f8f9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0c141d" media="(prefers-color-scheme: dark)">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Newsfeed">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="/static/styles.css">
   <script>
     try { const t = localStorage.getItem("nf-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
@@ -22,6 +31,10 @@
       </div>
       <div class="masthead__actions">
         <span class="badge badge--demo" id="demo-badge" hidden>Demo data</span>
+        <button class="btn btn--ghost" id="install" type="button" hidden title="Install Newsfeed as an app">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14"/></svg>
+          <span>Install</span>
+        </button>
         <button class="btn btn--ghost" id="refresh" type="button" title="Poll feeds now">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
           <span>Refresh</span>
@@ -33,6 +46,8 @@
     </div>
     <nav class="tabs" id="tabs" role="tablist" aria-label="Views"></nav>
   </header>
+
+  <div class="offline" id="offline" role="status" hidden></div>
 
   <main class="page">
     <section class="filters" id="filters" aria-label="Filters">
