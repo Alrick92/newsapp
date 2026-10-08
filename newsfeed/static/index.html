@@ -4,11 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Newsfeed</title>
-  <meta name="description" content="The last 72 hours of world, AI, technology and security news, with AI-curated trending stories.">
+  <meta name="description" content="A personal news reader: your feeds, unread counts, stars, full-text search and AI-curated trending stories.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f1b2a'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' text-anchor='middle' fill='%23f6f8f9'%3EN%3C/text%3E%3C/svg%3E">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css">
   <script>
     try { const t = localStorage.getItem("nf-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
@@ -62,7 +59,12 @@
       <select id="sort" class="select feed-only" aria-label="Sort">
         <option value="newest">Newest first</option>
         <option value="source">By source</option>
+        <option value="relevance" id="sort-relevance" hidden>Best match</option>
       </select>
+      <label class="toggle feed-only">
+        <input type="checkbox" id="unread-only">
+        <span>Unread only</span>
+      </label>
       <label class="toggle feed-only">
         <input type="checkbox" id="has-image">
         <span>With images</span>
@@ -88,7 +90,14 @@
     </section>
   </main>
 
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-text"></span>
+    <button class="btn btn--link" id="toast-undo" type="button" hidden>Undo</button>
+  </div>
+
   <footer class="footer">
+    <p class="keys" id="keys">Keys: <kbd>j</kbd>/<kbd>k</kbd> next/previous · <kbd>m</kbd> read/unread · <kbd>s</kbd> star ·
+      <kbd>o</kbd> open · <kbd>/</kbd> search · <kbd>Shift</kbd>+<kbd>A</kbd> mark all read</p>
     <p id="archive"></p>
     <p>Headlines and summaries come from each publisher's public RSS feed. Links open the original article.</p>
   </footer>
@@ -100,7 +109,14 @@
         <div class="card__meta"><span class="chip"></span><span class="dot">·</span><time></time></div>
         <h3 class="card__title"><a target="_blank" rel="noopener noreferrer"></a></h3>
         <p class="card__desc"></p>
+        <p class="card__also" hidden></p>
+        <div class="card__summary" hidden></div>
         <a class="card__url" target="_blank" rel="noopener noreferrer"></a>
+        <div class="card__actions">
+          <button class="act act--read" type="button"></button>
+          <button class="act act--star" type="button" aria-pressed="false"></button>
+          <button class="act act--summary" type="button" hidden>Summarize</button>
+        </div>
       </div>
     </article>
   </template>

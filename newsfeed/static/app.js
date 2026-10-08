@@ -1,19 +1,24 @@
 "use strict";
 
 const PAGE_SIZE = 60;
-const HOURS = [6, 12, 24, 72, 168, 720]; // the API caps this at the retention window
+const HOURS = [6, 12, 24, 72, 168, 720, 2160]; // the API caps this at the retention window
 const hoursLabel = (h) => (h % 24 === 0 && h > 72 ? `${h / 24}d` : `${h}h`);
 const CAT_COLOR = { world: "var(--cat-world)", politics: "var(--cat-politics)", ai: "var(--cat-ai)", tech: "var(--cat-tech)", security: "var(--cat-security)", economy: "var(--cat-economy)",
   local: "var(--cat-local)", blogs: "var(--cat-blogs)" };
 const FIRST_PARTY = new Set(["official-lab", "vendor-security", "government-advisory", "institutional"]);
 const EXT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
+const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg>';
+const VIEWS = [["trending", "Trending"], ["latest", "Latest"], ["starred", "Starred"]];
 
 const $ = (sel) => document.querySelector(sel);
-const state = { view: "trending", category: "", region: "", q: "", hours: 72, sources: new Set(), sort: "newest", hasImage: false, offset: 0 };
+const state = { view: "trending", category: "", region: "", q: "", hours: 72, sources: new Set(), sort: "newest",
+  hasImage: false, unreadOnly: false, offset: 0 };
 let meta = null;
 let trendingTimer = null;
 let counts = null; // per-category totals for the current filters, once loaded
+let unreadCounts = null; // per-category unread counts for the current filters
 let trendingData = null;
+let selected = -1; // index of the keyboard-selected card in the list
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -37,6 +42,14 @@ function safeHref(url) {
   return /^https?:\/\//i.test(url || "") ? url : "#";
 }
 
+// Categories from an imported OPML have no colour of their own: derive a stable one.
+function catColor(cat) {
+  if (CAT_COLOR[cat]) return CAT_COLOR[cat];
+  let h = 0;
+  for (const ch of cat || "") h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `hsl(${h} 45% 45%)`;
+}
+
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -51,8 +64,19 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+// Search snippets arrive with \x02…\x03 around matched words; build them as text, never HTML.
+function highlighted(snippet) {
+  const out = document.createDocumentFragment();
+  snippet.split("\x02").forEach((part, i) => {
+    if (i === 0) { out.append(part); return; }
+    const [hit, rest = ""] = part.split("\x03");
+    out.append(el("mark", { text: hit }), rest);
+  });
+  return out;
+}
+
 function placeholder(category, label) {
-  return el("div", { class: "placeholder", style: `--c:${CAT_COLOR[category] || "var(--accent)"}` , text: label });
+  return el("div", { class: "placeholder", style: `--c:${catColor(category)}`, text: label });
 }
 
 function media(container, image, category, label) {
@@ -68,8 +92,27 @@ function media(container, image, category, label) {
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    let detail = `${res.status} ${res.statusText}`;
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
   return res.json();
+}
+
+const post = (path, body) => api(path, {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+
+let toastTimer = null;
+function toast(text, undo) {
+  const box = $("#toast");
+  $("#toast-text").textContent = text;
+  const btn = $("#toast-undo");
+  btn.hidden = !undo;
+  btn.onclick = undo ? () => { box.hidden = true; undo(); } : null;
+  box.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { box.hidden = true; }, 7000);
 }
 
 // ---- URL state -------------------------------------------------------------
@@ -77,7 +120,8 @@ async function api(path, opts) {
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
   const legacyTab = p.get("tab"); // links from before the category dropdown
-  state.view = p.get("view") === "latest" || (legacyTab && legacyTab !== "trending") ? "latest" : "trending";
+  const view = p.get("view");
+  state.view = VIEWS.some(([id]) => id === view) ? view : legacyTab && legacyTab !== "trending" ? "latest" : "trending";
   const cat = p.get("cat") || legacyTab;
   state.category = meta?.categories[cat] ? cat : "";
   const region = p.get("region") || p.get("state"); // "state" is the pre-Politics name
@@ -85,8 +129,9 @@ function readHash() {
   state.q = p.get("q") || "";
   state.hours = allowedHours().includes(+p.get("hours")) ? +p.get("hours") : 72;
   state.sources = new Set((p.get("sources") || "").split(",").filter(Boolean));
-  state.sort = p.get("sort") === "source" ? "source" : "newest";
+  state.sort = ["source", "relevance"].includes(p.get("sort")) ? p.get("sort") : "newest";
   state.hasImage = p.get("img") === "1";
+  state.unreadOnly = p.get("unread") === "1";
 }
 
 function writeHash() {
@@ -99,29 +144,33 @@ function writeHash() {
   if (state.sources.size) p.set("sources", [...state.sources].join(","));
   if (state.sort !== "newest") p.set("sort", state.sort);
   if (state.hasImage) p.set("img", "1");
+  if (state.unreadOnly) p.set("unread", "1");
   const hash = p.toString();
   history.replaceState(null, "", hash ? `#${hash}` : location.pathname);
 }
 
 function filtersActive() {
-  return state.category || state.region || state.q || state.hours !== 72 || state.sources.size || state.sort !== "newest" || state.hasImage;
+  return state.category || state.region || state.q || state.hours !== 72 || state.sources.size
+    || state.sort !== "newest" || state.hasImage || state.unreadOnly;
 }
 
 // ---- chrome ----------------------------------------------------------------
 
-function renderTabs(counts) {
-  const total = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : null;
-  const views = [["trending", "Trending"], ["latest", "Latest"]];
-  $("#tabs").replaceChildren(...views.map(([id, label]) => {
+function renderTabs() {
+  const unread = unreadCounts ? Object.values(unreadCounts).reduce((a, b) => a + b, 0) : null;
+  const badge = { latest: unread, starred: meta?.starred || null };
+  $("#tabs").replaceChildren(...VIEWS.map(([id, label]) => {
     const btn = el("button", { class: "tab", role: "tab", type: "button", "aria-selected": String(state.view === id) });
     btn.append(label);
-    if (id === "latest" && total !== null) btn.append(el("span", { class: "tab__count", text: String(total) }));
+    if (badge[id] != null && (id !== "latest" || state.view !== "starred")) {
+      btn.append(el("span", { class: "tab__count", text: String(badge[id]),
+        title: id === "latest" ? "Unread stories for the current filters" : "Starred stories" }));
+    }
     btn.addEventListener("click", () => { state.view = id; state.offset = 0; writeHash(); render(); });
     return btn;
   }));
 }
 
-// Category dropdown: item counts in Latest, story counts in Trending.
 // Feed ids for the chosen region (a state in Local, US/International in
 // Politics); null when the category has no regions or none is chosen.
 function regionSources() {
@@ -142,20 +191,26 @@ function renderRegion() {
   select.value = state.region;
 }
 
+// Category dropdown: unread counts in the reader views, story counts in Trending.
 function renderCategory() {
   const select = $("#category");
-  let tally = counts;
+  let tally = unreadCounts;
+  let suffix = " unread";
   if (state.view === "trending" && trendingData) {
     tally = {};
     for (const s of trendingData.stories) tally[s.category] = (tally[s.category] || 0) + 1;
+    suffix = "";
+  } else if (state.view === "starred") {
+    tally = counts;
+    suffix = "";
   }
-  const label = (text, n) => (tally ? `${text} (${n ?? 0})` : text);
+  const label = (text, n) => (tally && n ? `${text} (${n}${suffix})` : text);
   const total = tally ? Object.values(tally).reduce((a, b) => a + b, 0) : 0;
   select.replaceChildren(
     el("option", { value: "", text: label("All categories", total) }),
     ...Object.entries(meta.categories).map(([id, name]) => el("option", { value: id, text: label(name, tally?.[id]) })));
   select.value = state.category;
-  select.style.setProperty("--cat", state.category ? CAT_COLOR[state.category] : "var(--accent)");
+  select.style.setProperty("--cat", state.category ? catColor(state.category) : "var(--accent)");
 }
 
 function allowedHours() {
@@ -190,10 +245,14 @@ function renderSourcesPanel() {
 
 function syncControls() {
   $("#q").value = state.q;
+  $("#sort-relevance").hidden = !state.q;
   $("#sort").value = state.sort;
   $("#has-image").checked = state.hasImage;
+  $("#unread-only").checked = state.unreadOnly;
   $("#clear").hidden = !filtersActive();
   $("#filters").classList.toggle("is-trending", state.view === "trending");
+  $("#filters").classList.toggle("is-starred", state.view === "starred");
+  $("#keys").hidden = state.view === "trending";
   renderCategory();
   renderRegion();
   const n = state.sources.size;
@@ -205,15 +264,103 @@ function syncControls() {
 function renderMeta() {
   const updated = meta.last_refresh ? `updated ${timeAgo(meta.last_refresh)}` : "waiting for first poll";
   $("#meta").textContent = `${meta.total.toLocaleString()} stories in the last ${meta.window_hours} hours · ${updated}`;
-  $("#archive").textContent = meta.stored > meta.total
-    ? `${meta.stored.toLocaleString()} stories from ${meta.sources.length} feeds are kept for ${meta.retention_days} days.` : "";
+  const parts = [];
+  if (meta.stored > meta.total) {
+    parts.push(`${meta.stored.toLocaleString()} stories from ${meta.sources.length} feeds are kept for ${meta.retention_days} days; starred stories are kept for good.`);
+  }
+  if (meta.feed_list_error) parts.push(`Feed list problem: ${meta.feed_list_error}. Using the last good version.`);
+  $("#archive").textContent = parts.join(" ");
   $("#demo-badge").hidden = !meta.demo;
 }
 
-// ---- feed view -------------------------------------------------------------
+// ---- reader list -----------------------------------------------------------
+
+function cards() {
+  return [...$("#grid").querySelectorAll(".card")];
+}
+
+function adjustUnread(category, delta) {
+  if (!unreadCounts) return;
+  unreadCounts[category] = Math.max(0, (unreadCounts[category] || 0) + delta);
+  renderTabs();
+  renderCategory();
+}
+
+function paintRead(node, item) {
+  const read = Boolean(item.read_at);
+  node.classList.toggle("is-read", read);
+  const btn = node.querySelector(".act--read");
+  btn.textContent = read ? "Mark unread" : "Mark read";
+  btn.title = read ? "Mark unread (m)" : "Mark read (m)";
+}
+
+function paintStar(node, item) {
+  const btn = node.querySelector(".act--star");
+  const on = Boolean(item.starred_at);
+  btn.setAttribute("aria-pressed", String(on));
+  btn.replaceChildren();
+  btn.insertAdjacentHTML("beforeend", STAR);
+  btn.append(on ? "Starred" : "Star");
+  btn.title = on ? "Remove star (s)" : "Star (s)";
+}
+
+async function setRead(node, item, read) {
+  if (Boolean(item.read_at) === read) return;
+  const before = item.read_at;
+  item.read_at = read ? Date.now() / 1000 : null;
+  paintRead(node, item);
+  adjustUnread(item.category, read ? -1 : 1);
+  try {
+    await post(`/api/items/${encodeURIComponent(item.id)}/read`, { read });
+  } catch (err) {
+    item.read_at = before;
+    paintRead(node, item);
+    adjustUnread(item.category, read ? 1 : -1);
+    toast(`Couldn't save: ${err.message}`);
+  }
+}
+
+async function toggleStar(node, item) {
+  const on = !item.starred_at;
+  item.starred_at = on ? Date.now() / 1000 : null;
+  paintStar(node, item);
+  try {
+    await post(`/api/items/${encodeURIComponent(item.id)}/star`, { starred: on });
+    meta.starred = Math.max(0, (meta.starred || 0) + (on ? 1 : -1));
+    renderTabs();
+  } catch (err) {
+    item.starred_at = on ? null : Date.now() / 1000;
+    paintStar(node, item);
+    toast(`Couldn't save: ${err.message}`);
+  }
+}
+
+function showSummary(node, text) {
+  const box = node.querySelector(".card__summary");
+  box.replaceChildren(el("span", { class: "card__summary-label", text: "Summary" }), el("p", { text }));
+  box.hidden = false;
+  node.querySelector(".act--summary").hidden = true;
+}
+
+async function summarize(node, item) {
+  const btn = node.querySelector(".act--summary");
+  btn.disabled = true;
+  btn.textContent = "Summarizing…";
+  try {
+    const res = await post(`/api/items/${encodeURIComponent(item.id)}/summary`);
+    item.summary = res.summary;
+    showSummary(node, res.summary);
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Summarize";
+    toast(err.message);
+  }
+}
 
 function card(item) {
   const node = $("#card-tpl").content.firstElementChild.cloneNode(true);
+  node.dataset.id = item.id;
+  node._item = item;
   const href = safeHref(item.url);
   const mediaLink = node.querySelector(".card__media");
   mediaLink.href = href;
@@ -222,7 +369,7 @@ function card(item) {
 
   const chip = node.querySelector(".chip");
   chip.textContent = item.source;
-  chip.style.setProperty("--c", CAT_COLOR[item.category]);
+  chip.style.setProperty("--c", catColor(item.category));
   if (FIRST_PARTY.has(item.source_class)) chip.title = `First-party source (${item.source_class})`;
   const time = node.querySelector("time");
   time.dateTime = new Date(item.published * 1000).toISOString();
@@ -233,29 +380,66 @@ function card(item) {
   title.href = href;
   title.textContent = item.title;
   const desc = node.querySelector(".card__desc");
-  desc.textContent = item.description;
-  desc.hidden = !item.description;
+  if (item.snippet) desc.replaceChildren(highlighted(item.snippet));
+  else desc.textContent = item.description;
+  desc.hidden = !item.snippet && !item.description;
+
+  if (item.also?.length) {
+    const also = node.querySelector(".card__also");
+    also.append("Also in ");
+    item.also.forEach((a, i) => {
+      if (i) also.append(", ");
+      also.append(el("a", { href: safeHref(a.url), target: "_blank", rel: "noopener noreferrer", text: a.source }));
+    });
+    also.hidden = false;
+  }
 
   const url = node.querySelector(".card__url");
   url.href = href;
   url.append(el("span", { text: displayUrl(item.url) }));
   url.insertAdjacentHTML("beforeend", EXT);
+
+  // Opening the article marks it read.
+  for (const a of [title, mediaLink, url]) a.addEventListener("click", () => setRead(node, item, true));
+  node.querySelector(".act--read").addEventListener("click", () => setRead(node, item, !item.read_at));
+  node.querySelector(".act--star").addEventListener("click", () => toggleStar(node, item));
+  const sumBtn = node.querySelector(".act--summary");
+  if (item.summary) showSummary(node, item.summary);
+  else if (item.summarizable) {
+    sumBtn.hidden = false;
+    sumBtn.addEventListener("click", () => summarize(node, item));
+  }
+  node.addEventListener("click", () => select(cards().indexOf(node), false));
+  paintRead(node, item);
+  paintStar(node, item);
   return node;
 }
 
-async function loadFeed(append = false) {
-  const grid = $("#grid");
-  if (!append) grid.replaceChildren(...Array.from({ length: 6 }, () => el("div", { class: "skeleton" })));
-  const params = new URLSearchParams({ hours: state.hours, sort: state.sort, limit: PAGE_SIZE, offset: state.offset });
+function listParams() {
+  const params = new URLSearchParams({ hours: state.hours, sort: state.sort });
   if (state.category) params.set("category", state.category);
   if (state.q) params.set("q", state.q);
-  // A chosen state narrows the source filter to that state's feeds.
+  // A chosen region narrows the source filter to that region's feeds.
   const inRegion = regionSources();
   let sources = [...state.sources];
   if (inRegion) sources = sources.length ? sources.filter((id) => inRegion.has(id)) : [...inRegion];
   if (inRegion && !sources.length) sources = ["none"]; // picked sources are all outside the region
   if (sources.length) params.set("sources", sources.join(","));
   if (state.hasImage) params.set("has_image", "true");
+  if (state.view === "starred") params.set("starred", "true");
+  return params;
+}
+
+async function loadFeed(append = false) {
+  const grid = $("#grid");
+  if (!append) {
+    selected = -1;
+    grid.replaceChildren(...Array.from({ length: 6 }, () => el("div", { class: "skeleton" })));
+  }
+  const params = listParams();
+  params.set("limit", PAGE_SIZE);
+  params.set("offset", state.offset);
+  if (state.unreadOnly && state.view !== "starred") params.set("unread", "true");
 
   let data;
   try {
@@ -265,18 +449,95 @@ async function loadFeed(append = false) {
     return;
   }
   counts = data.counts;
-  renderTabs(counts);
+  unreadCounts = data.unread_counts;
+  renderTabs();
   renderCategory();
-  const cards = data.items.map(card);
-  if (append) grid.append(...cards);
-  else if (cards.length) grid.replaceChildren(...cards);
-  else grid.replaceChildren(el("div", { class: "empty" },
-    el("h3", { text: meta.total ? "No stories match" : "No stories yet" }),
-    el("p", { text: meta.total ? "Try a wider time window or fewer filters." : "Feeds are being polled — check back in a minute." })));
+  const nodes = data.items.map(card);
+  if (append) grid.append(...nodes);
+  else if (nodes.length) grid.replaceChildren(...nodes);
+  else grid.replaceChildren(emptyState());
 
   const shown = Math.min(state.offset + PAGE_SIZE, data.total);
-  $("#count").textContent = data.total ? `Showing ${shown} of ${data.total} stories` : "";
+  const noun = state.view === "starred" ? "starred stories" : state.q ? "matches" : "stories";
+  $("#count").textContent = data.total ? `Showing ${shown} of ${data.total} ${noun}` : "";
   $("#more").hidden = shown >= data.total;
+}
+
+function emptyState() {
+  if (state.view === "starred") {
+    return el("div", { class: "empty" }, el("h3", { text: "No starred stories" }),
+      el("p", { text: "Star a story with its Star button or the s key to keep it here for good." }));
+  }
+  if (state.unreadOnly && meta.total) {
+    return el("div", { class: "empty" }, el("h3", { text: "All caught up" }),
+      el("p", { text: "Nothing unread for these filters. Turn off Unread only to see everything." }));
+  }
+  return el("div", { class: "empty" },
+    el("h3", { text: meta.total ? "No stories match" : "No stories yet" }),
+    el("p", { text: meta.total ? "Try a wider time window or fewer filters." : "Feeds are being polled. Check back in a minute." }));
+}
+
+async function markAllRead() {
+  const params = listParams();
+  const scope = state.category ? meta.categories[state.category] : "these filters";
+  try {
+    const { changed: ids } = await post(`/api/items/mark-all-read?${params}`);
+    if (!ids.length) { toast("Nothing unread here."); return; }
+    loadFeed();
+    toast(`Marked ${ids.length} ${ids.length === 1 ? "story" : "stories"} in ${scope} read.`, async () => {
+      await post("/api/items/read", { ids, read: false });
+      loadFeed();
+      toast("Restored as unread.");
+    });
+  } catch (err) {
+    toast(`Couldn't mark read: ${err.message}`);
+  }
+}
+
+// ---- keyboard --------------------------------------------------------------
+
+function select(index, scroll = true) {
+  const list = cards();
+  if (!list.length) return;
+  selected = Math.max(0, Math.min(index, list.length - 1));
+  list.forEach((c, i) => c.classList.toggle("is-selected", i === selected));
+  if (scroll) list[selected].scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
+
+function selectedCard() {
+  return cards()[selected] || null;
+}
+
+function onKey(e) {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") {
+    if (e.key === "Escape") document.activeElement.blur();
+    return;
+  }
+  if (e.key === "Escape") { $("#sources-panel").hidden = true; $("#sources-btn").setAttribute("aria-expanded", "false"); return; }
+  if (state.view === "trending") return;
+  const node = selectedCard();
+  switch (e.key) {
+    case "j": {
+      const list = cards();
+      if (selected >= list.length - 1 && !$("#more").hidden) {
+        $("#more").click(); // load the next page, then move on
+      }
+      select(selected + 1);
+      break;
+    }
+    case "k": select(selected - 1); break;
+    case "m": if (node) setRead(node, node._item, !node._item.read_at); break;
+    case "s": if (node) toggleStar(node, node._item); break;
+    case "o": case "Enter":
+      if (node) { node.querySelector(".card__title a").click(); }
+      break;
+    case "/": e.preventDefault(); $("#q").focus(); break;
+    case "A": if (e.shiftKey) markAllRead(); break;
+    default: return;
+  }
+  e.preventDefault();
 }
 
 // ---- trending view ---------------------------------------------------------
@@ -297,7 +558,7 @@ function story(s, rank, aiWritten) {
         el("span", { text: timeAgo(it.published) })))));
   const more = s.items.length - limit;
 
-  const chip = el("span", { class: "chip", text: meta.categories[s.category] || s.category, style: `--c:${CAT_COLOR[s.category]}` });
+  const chip = el("span", { class: "chip", text: meta.categories[s.category] || s.category, style: `--c:${catColor(s.category)}` });
   return el("article", { class: `story${lead ? " story--lead" : ""}` }, m,
     el("div", { class: "story__body" },
       el("div", { class: "card__meta" }, chip, el("span", { class: "dot", text: "·" }),
@@ -318,7 +579,7 @@ async function loadTrending(force = false) {
   if (!box.children.length || force) box.replaceChildren(...Array.from({ length: 3 }, () => el("div", { class: "skeleton" })));
   let data;
   try {
-    data = force ? await api("/api/trending/refresh", { method: "POST" }) : await api("/api/trending");
+    data = force ? await post("/api/trending/refresh") : await api("/api/trending");
   } catch (err) {
     box.replaceChildren(el("div", { class: "empty" }, el("h3", { text: "Couldn't load trending stories" }), el("p", { text: String(err.message) })));
     return;
@@ -380,7 +641,7 @@ function render() {
   $("#trending-view").hidden = !trending;
   $("#feed-view").hidden = trending;
   syncControls();
-  renderTabs(counts);
+  renderTabs();
   if (trending) loadTrending();
   else loadFeed();
 }
@@ -395,7 +656,15 @@ function wire() {
   let debounce;
   $("#q").addEventListener("input", (e) => {
     clearTimeout(debounce);
-    debounce = setTimeout(() => { state.q = e.target.value.trim(); state.offset = 0; changed(); }, 220);
+    debounce = setTimeout(() => {
+      const q = e.target.value.trim();
+      // Searching switches to best-match order; clearing the search switches back.
+      if (q && !state.q && state.sort === "newest") state.sort = "relevance";
+      if (!q && state.sort === "relevance") state.sort = "newest";
+      state.q = q;
+      state.offset = 0;
+      changed();
+    }, 220);
   });
   $("#category").addEventListener("change", (e) => {
     state.category = e.target.value;
@@ -414,8 +683,9 @@ function wire() {
   });
   $("#sort").addEventListener("change", (e) => { state.sort = e.target.value; state.offset = 0; changed(); });
   $("#has-image").addEventListener("change", (e) => { state.hasImage = e.target.checked; state.offset = 0; changed(); });
+  $("#unread-only").addEventListener("change", (e) => { state.unreadOnly = e.target.checked; state.offset = 0; changed(); });
   $("#clear").addEventListener("click", () => {
-    Object.assign(state, { category: "", region: "", q: "", hours: 72, sort: "newest", hasImage: false, offset: 0 });
+    Object.assign(state, { category: "", region: "", q: "", hours: 72, sort: "newest", hasImage: false, unreadOnly: false, offset: 0 });
     state.sources.clear();
     renderSourcesPanel();
     changed();
@@ -431,10 +701,7 @@ function wire() {
   document.addEventListener("click", (e) => {
     if (!$("#sources-dd").contains(e.target)) { panel.hidden = true; toggle.setAttribute("aria-expanded", "false"); }
   });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { panel.hidden = true; toggle.setAttribute("aria-expanded", "false"); }
-    if (e.key === "/" && document.activeElement.tagName !== "INPUT" && state.view !== "trending") { e.preventDefault(); $("#q").focus(); }
-  });
+  document.addEventListener("keydown", onKey);
 
   $("#theme").addEventListener("click", () => {
     const root = document.documentElement;
@@ -448,12 +715,12 @@ function wire() {
     btn.disabled = true;
     btn.classList.add("is-spinning");
     try {
-      await api("/api/refresh", { method: "POST" });
+      await post("/api/refresh");
       meta = await api("/api/meta");
       renderMeta();
       render();
     } catch (err) {
-      console.error(err);
+      toast(`Refresh failed: ${err.message}`);
     } finally {
       btn.disabled = false;
       btn.classList.remove("is-spinning");
@@ -470,10 +737,15 @@ async function boot() {
   renderSourcesPanel();
   wire();
   // Counts come from the item endpoint; fetch once so the Trending view has them too.
-  api(`/api/items?limit=1`).then((d) => { counts = counts || d.counts; renderTabs(counts); renderCategory(); }).catch(() => {});
+  api(`/api/items?limit=1`).then((d) => {
+    counts = counts || d.counts;
+    unreadCounts = unreadCounts || d.unread_counts;
+    renderTabs();
+    renderCategory();
+  }).catch(() => {});
   render();
   setInterval(async () => {
-    try { meta = await api("/api/meta"); renderMeta(); } catch {}
+    try { meta = await api("/api/meta"); renderMeta(); renderTabs(); } catch {}
   }, 60_000);
 }
 
