@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.0">
+  <head>
+    <title>Alrick subscriptions in feedly Cloud</title>
+  </head>
+  <body>
+    <outline text="Tech" title="Tech">
+      <outline type="rss" text="Ars Technica - All content" title="Ars Technica - All content" xmlUrl="https://feeds.arstechnica.com/arstechnica/index" htmlUrl="https://arstechnica.com"/>
+      <outline type="rss" text="The Verge" title="The Verge" xmlUrl="http://www.theverge.com/rss/tech/index.xml/" htmlUrl="https://www.theverge.com"/>
+    </outline>
+    <outline text="Cooking" title="Cooking">
+      <outline type="rss" text="Smitten Kitchen" title="Smitten Kitchen" xmlUrl="https://smittenkitchen.com/feed/" htmlUrl="https://smittenkitchen.com"/>
+      <outline type="rss" text="Serious Eats" title="Serious Eats" xmlUrl="https://www.seriouseats.com/feeds/all" htmlUrl="https://www.seriouseats.com"/>
+    </outline>
+    <outline text="Empty folder" title="Empty folder"/>
+    <outline type="rss" text="xkcd" title="xkcd" xmlUrl="https://xkcd.com/atom.xml" htmlUrl="https://xkcd.com"/>
+  </body>
+</opml>

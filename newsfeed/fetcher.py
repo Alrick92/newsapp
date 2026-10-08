@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field
 
 import httpx
 
-from .feeds import FEEDS, Feed
+from .feeds import FEEDS, Feed, FeedList
 from .items import Item, parse_feed
 from .store import Store
 
@@ -49,8 +49,11 @@ class Fetcher:
     concurrency: int = 8
     og_image_budget: int = int(os.environ.get("NEWSFEED_OG_IMAGE_BUDGET", "40"))
     state: dict[str, FeedState] = field(default_factory=dict)
+    feed_list: FeedList | None = None  # when set, feeds follow the editable OPML
 
     def __post_init__(self) -> None:
+        if self.feed_list:
+            self.feeds = self.feed_list.catalog.feeds
         for feed_id, saved in self.store.feed_states().items():
             self.state[feed_id] = FeedState(**saved)
 
@@ -63,6 +66,8 @@ class Fetcher:
 
     async def refresh(self, force: bool = False) -> dict:
         """Poll every feed that is due; returns a small summary."""
+        if self.feed_list and self.feed_list.reload_if_changed():
+            self.feeds = self.feed_list.catalog.feeds
         now = time.time()
         due = [f for f in self.feeds
                if force or now - self.state.setdefault(f.id, FeedState()).last_polled >= f.poll_minutes * 60]

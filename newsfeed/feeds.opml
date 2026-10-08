@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml xmlns:nf="https://github.com/alrick92/newsapp/ns/opml" version="2.0">
+  <head>
+    <title>Newsfeed</title>
+  </head>
+  <body>
+    <outline text="World" title="World" nf:key="world">
+      <outline type="rss" text="The Guardian" title="The Guardian" xmlUrl="https://www.theguardian.com/world/rss" htmlUrl="https://www.theguardian.com" nf:id="guardian-world" nf:class="publisher" nf:poll="5" />
+      <outline type="rss" text="BBC News" title="BBC News" xmlUrl="https://feeds.bbci.co.uk/news/world/rss.xml" htmlUrl="https://feeds.bbci.co.uk" nf:id="bbc-world" nf:class="publisher" nf:poll="5" />
+      <outline type="rss" text="Al Jazeera" title="Al Jazeera" xmlUrl="https://www.aljazeera.com/xml/rss/all.xml" htmlUrl="https://www.aljazeera.com" nf:id="aljazeera" nf:class="publisher" nf:poll="5" />
+      <outline type="rss" text="DW" title="DW" xmlUrl="https://rss.dw.com/rdf/rss-en-world" htmlUrl="https://rss.dw.com" nf:id="dw-world" nf:class="publisher" nf:poll="5" />
+      <outline type="rss" text="France 24" title="France 24" xmlUrl="https://www.france24.com/en/monde/rss" htmlUrl="https://www.france24.com" nf:id="france24" nf:class="publisher" nf:poll="5" />
+      <outline type="rss" text="NPR" title="NPR" xmlUrl="https://feeds.npr.org/1004/rss.xml" htmlUrl="https://feeds.npr.org" nf:id="npr-world" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="UN News" title="UN News" xmlUrl="https://news.un.org/feed/subscribe/en/news/all/rss.xml" htmlUrl="https://news.un.org" nf:id="un-news" nf:class="institutional" nf:poll="30" />
+    </outline>
+    <outline text="Politics" title="Politics" nf:key="politics" nf:allLabel="US and international">
+      <outline text="United States" title="United States" nf:region="US">
+        <outline type="rss" text="NPR Politics" title="NPR Politics" xmlUrl="https://feeds.npr.org/1014/rss.xml" htmlUrl="https://feeds.npr.org" nf:id="npr-politics" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="PBS NewsHour" title="PBS NewsHour" xmlUrl="https://www.pbs.org/newshour/feeds/rss/politics" htmlUrl="https://www.pbs.org" nf:id="pbs-politics" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="The New York Times" title="The New York Times" xmlUrl="https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml" htmlUrl="https://rss.nytimes.com" nf:id="nyt-politics" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="The Guardian US" title="The Guardian US" xmlUrl="https://www.theguardian.com/us-news/us-politics/rss" htmlUrl="https://www.theguardian.com" nf:id="guardian-us-politics" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="The Hill" title="The Hill" xmlUrl="https://thehill.com/homenews/feed/" htmlUrl="https://thehill.com" nf:id="the-hill" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="Roll Call" title="Roll Call" xmlUrl="https://rollcall.com/feed/" htmlUrl="https://rollcall.com" nf:id="roll-call" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="SCOTUSblog" title="SCOTUSblog" xmlUrl="https://www.scotusblog.com/feed/" htmlUrl="https://www.scotusblog.com" nf:id="scotusblog" nf:class="publisher" nf:poll="30" />
+      </outline>
+      <outline text="International" title="International" nf:region="INTL">
+        <outline type="rss" text="BBC Politics" title="BBC Politics" xmlUrl="https://feeds.bbci.co.uk/news/politics/rss.xml" htmlUrl="https://feeds.bbci.co.uk" nf:id="bbc-politics" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="The Guardian Politics" title="The Guardian Politics" xmlUrl="https://www.theguardian.com/politics/rss" htmlUrl="https://www.theguardian.com" nf:id="guardian-politics" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="POLITICO Europe" title="POLITICO Europe" xmlUrl="https://www.politico.eu/feed/" htmlUrl="https://www.politico.eu" nf:id="politico-europe" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="CBC Politics" title="CBC Politics" xmlUrl="https://www.cbc.ca/webfeed/rss/rss-politics" htmlUrl="https://www.cbc.ca" nf:id="cbc-politics" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="Foreign Policy" title="Foreign Policy" xmlUrl="https://foreignpolicy.com/feed/" htmlUrl="https://foreignpolicy.com" nf:id="foreign-policy" nf:class="publisher" nf:poll="30" />
+      </outline>
+    </outline>
+    <outline text="AI" title="AI" nf:key="ai">
+      <outline type="rss" text="TechCrunch" title="TechCrunch" xmlUrl="https://techcrunch.com/category/artificial-intelligence/feed/" htmlUrl="https://techcrunch.com" nf:id="techcrunch-ai" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="Ars Technica" title="Ars Technica" xmlUrl="https://arstechnica.com/ai/feed/" htmlUrl="https://arstechnica.com" nf:id="ars-ai" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="WIRED" title="WIRED" xmlUrl="https://www.wired.com/feed/tag/ai/latest/rss" htmlUrl="https://www.wired.com" nf:id="wired-ai" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="MIT Technology Review" title="MIT Technology Review" xmlUrl="https://www.technologyreview.com/topic/artificial-intelligence/feed" htmlUrl="https://www.technologyreview.com" nf:id="mit-tr-ai" nf:class="publisher" nf:poll="30" />
+      <outline type="rss" text="OpenAI" title="OpenAI" xmlUrl="https://openai.com/news/rss.xml" htmlUrl="https://openai.com" nf:id="openai" nf:class="official-lab" nf:poll="30" />
+      <outline type="rss" text="Google DeepMind" title="Google DeepMind" xmlUrl="https://deepmind.google/blog/rss.xml" htmlUrl="https://deepmind.google" nf:id="deepmind" nf:class="official-lab" nf:poll="30" />
+      <outline type="rss" text="Hugging Face" title="Hugging Face" xmlUrl="https://huggingface.co/blog/feed.xml" htmlUrl="https://huggingface.co" nf:id="huggingface" nf:class="official-lab" nf:poll="30" />
+    </outline>
+    <outline text="Technology" title="Technology" nf:key="tech">
+      <outline type="rss" text="The Verge" title="The Verge" xmlUrl="https://www.theverge.com/rss/tech/index.xml" htmlUrl="https://www.theverge.com" nf:id="verge-tech" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="BBC Technology" title="BBC Technology" xmlUrl="https://feeds.bbci.co.uk/news/technology/rss.xml" htmlUrl="https://feeds.bbci.co.uk" nf:id="bbc-tech" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="IEEE Spectrum" title="IEEE Spectrum" xmlUrl="https://spectrum.ieee.org/feeds/feed.rss" htmlUrl="https://spectrum.ieee.org" nf:id="ieee-spectrum" nf:class="publisher" nf:poll="30" />
+    </outline>
+    <outline text="Security" title="Security" nf:key="security">
+      <outline type="rss" text="BleepingComputer" title="BleepingComputer" xmlUrl="https://www.bleepingcomputer.com/feed/" htmlUrl="https://www.bleepingcomputer.com" nf:id="bleepingcomputer" nf:class="publisher" nf:poll="5" />
+      <outline type="rss" text="The Hacker News" title="The Hacker News" xmlUrl="https://thehackernews.com/feeds/posts/default?alt=rss" htmlUrl="https://thehackernews.com" nf:id="thehackernews" nf:class="publisher" nf:poll="5" />
+      <outline type="rss" text="Dark Reading" title="Dark Reading" xmlUrl="https://www.darkreading.com/rss.xml" htmlUrl="https://www.darkreading.com" nf:id="darkreading" nf:class="publisher" nf:poll="5" />
+      <outline type="rss" text="WIRED Security" title="WIRED Security" xmlUrl="https://www.wired.com/feed/category/security/rss" htmlUrl="https://www.wired.com" nf:id="wired-security" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="Google Security Blog" title="Google Security Blog" xmlUrl="https://security.googleblog.com/feeds/posts/default" htmlUrl="https://security.googleblog.com" nf:id="google-security" nf:class="vendor-security" nf:poll="30" />
+      <outline type="rss" text="Microsoft Security" title="Microsoft Security" xmlUrl="https://www.microsoft.com/en-us/security/blog/feed/" htmlUrl="https://www.microsoft.com" nf:id="ms-security" nf:class="vendor-security" nf:poll="30" />
+      <outline type="rss" text="SANS ISC" title="SANS ISC" xmlUrl="https://isc.sans.edu/rssfeed_full.xml" htmlUrl="https://isc.sans.edu" nf:id="sans-isc" nf:class="community/blog" nf:poll="30" />
+      <outline type="rss" text="CISA" title="CISA" xmlUrl="https://www.cisa.gov/cybersecurity-advisories/all.xml" htmlUrl="https://www.cisa.gov" nf:id="cisa" nf:class="government-advisory" nf:poll="30" />
+      <outline type="rss" text="KrebsOnSecurity" title="KrebsOnSecurity" xmlUrl="https://krebsonsecurity.com/feed/" htmlUrl="https://krebsonsecurity.com" nf:id="krebs" nf:class="community/blog" nf:poll="30" />
+    </outline>
+    <outline text="Economy" title="Economy" nf:key="economy">
+      <outline type="rss" text="BBC Business" title="BBC Business" xmlUrl="https://feeds.bbci.co.uk/news/business/rss.xml" htmlUrl="https://feeds.bbci.co.uk" nf:id="bbc-business" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="The Guardian Economics" title="The Guardian Economics" xmlUrl="https://www.theguardian.com/business/economics/rss" htmlUrl="https://www.theguardian.com" nf:id="guardian-economics" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="CNBC" title="CNBC" xmlUrl="https://www.cnbc.com/id/20910258/device/rss/rss.html" htmlUrl="https://www.cnbc.com" nf:id="cnbc-economy" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="NPR Economy" title="NPR Economy" xmlUrl="https://feeds.npr.org/1017/rss.xml" htmlUrl="https://feeds.npr.org" nf:id="npr-economy" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="DW Business" title="DW Business" xmlUrl="https://rss.dw.com/rdf/rss-en-bus" htmlUrl="https://rss.dw.com" nf:id="dw-business" nf:class="publisher" nf:poll="15" />
+      <outline type="rss" text="The Economist" title="The Economist" xmlUrl="https://www.economist.com/finance-and-economics/rss.xml" htmlUrl="https://www.economist.com" nf:id="economist-finance" nf:class="publisher" nf:poll="30" />
+      <outline type="rss" text="Federal Reserve" title="Federal Reserve" xmlUrl="https://www.federalreserve.gov/feeds/press_all.xml" htmlUrl="https://www.federalreserve.gov" nf:id="federal-reserve" nf:class="institutional" nf:poll="30" />
+      <outline type="rss" text="European Central Bank" title="European Central Bank" xmlUrl="https://www.ecb.europa.eu/rss/press.html" htmlUrl="https://www.ecb.europa.eu" nf:id="ecb" nf:class="institutional" nf:poll="30" />
+    </outline>
+    <outline text="Local" title="Local" nf:key="local" nf:allLabel="All states">
+      <outline text="Georgia" title="Georgia" nf:region="GA">
+        <outline type="rss" text="Georgia Recorder" title="Georgia Recorder" xmlUrl="https://georgiarecorder.com/feed/" htmlUrl="https://georgiarecorder.com" nf:id="georgia-recorder" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="Rough Draft Atlanta" title="Rough Draft Atlanta" xmlUrl="https://roughdraftatlanta.com/feed/" htmlUrl="https://roughdraftatlanta.com" nf:id="rough-draft-atlanta" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="Atlanta Civic Circle" title="Atlanta Civic Circle" xmlUrl="https://atlantaciviccircle.org/feed/" htmlUrl="https://atlantaciviccircle.org" nf:id="atlanta-civic-circle" nf:class="publisher" nf:poll="30" />
+      </outline>
+      <outline text="Maryland" title="Maryland" nf:region="MD">
+        <outline type="rss" text="Maryland Matters" title="Maryland Matters" xmlUrl="https://marylandmatters.org/feed/" htmlUrl="https://marylandmatters.org" nf:id="maryland-matters" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="The Baltimore Sun" title="The Baltimore Sun" xmlUrl="https://www.baltimoresun.com/feed/" htmlUrl="https://www.baltimoresun.com" nf:id="baltimore-sun" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="Baltimore Brew" title="Baltimore Brew" xmlUrl="https://baltimorebrew.com/feed/" htmlUrl="https://baltimorebrew.com" nf:id="baltimore-brew" nf:class="publisher" nf:poll="30" />
+      </outline>
+      <outline text="Pennsylvania" title="Pennsylvania" nf:region="PA">
+        <outline type="rss" text="Pennsylvania Capital-Star" title="Pennsylvania Capital-Star" xmlUrl="https://penncapital-star.com/feed/" htmlUrl="https://penncapital-star.com" nf:id="pa-capital-star" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="Spotlight PA" title="Spotlight PA" xmlUrl="https://www.spotlightpa.org/feeds/full.xml" htmlUrl="https://www.spotlightpa.org" nf:id="spotlight-pa" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="Billy Penn" title="Billy Penn" xmlUrl="https://billypenn.com/feed/" htmlUrl="https://billypenn.com" nf:id="billy-penn" nf:class="publisher" nf:poll="30" />
+        <outline type="rss" text="PublicSource" title="PublicSource" xmlUrl="https://www.publicsource.org/feed/" htmlUrl="https://www.publicsource.org" nf:id="publicsource" nf:class="publisher" nf:poll="30" />
+      </outline>
+      <outline text="Virginia" title="Virginia" nf:region="VA">
+        <outline type="rss" text="Virginia Mercury" title="Virginia Mercury" xmlUrl="https://virginiamercury.com/feed/" htmlUrl="https://virginiamercury.com" nf:id="virginia-mercury" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="Cardinal News" title="Cardinal News" xmlUrl="https://cardinalnews.org/feed/" htmlUrl="https://cardinalnews.org" nf:id="cardinal-news" nf:class="publisher" nf:poll="15" />
+      </outline>
+      <outline text="West Virginia" title="West Virginia" nf:region="WV">
+        <outline type="rss" text="West Virginia Watch" title="West Virginia Watch" xmlUrl="https://westvirginiawatch.com/feed/" htmlUrl="https://westvirginiawatch.com" nf:id="west-virginia-watch" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="Mountain State Spotlight" title="Mountain State Spotlight" xmlUrl="https://mountainstatespotlight.org/feed/" htmlUrl="https://mountainstatespotlight.org" nf:id="mountain-state-spotlight" nf:class="publisher" nf:poll="15" />
+        <outline type="rss" text="WV MetroNews" title="WV MetroNews" xmlUrl="https://wvmetronews.com/feed/" htmlUrl="https://wvmetronews.com" nf:id="wv-metronews" nf:class="publisher" nf:poll="15" />
+      </outline>
+    </outline>
+    <outline text="Blogs" title="Blogs" nf:key="blogs">
+      <outline type="rss" text="Simon Willison" title="Simon Willison" xmlUrl="https://simonwillison.net/atom/everything/" htmlUrl="https://simonwillison.net" nf:id="simon-willison" nf:class="publisher" nf:poll="30" />
+      <outline type="rss" text="One Useful Thing" title="One Useful Thing" xmlUrl="https://www.oneusefulthing.org/feed" htmlUrl="https://www.oneusefulthing.org" nf:id="one-useful-thing" nf:class="publisher" nf:poll="30" />
+      <outline type="rss" text="Stratechery" title="Stratechery" xmlUrl="https://stratechery.com/feed/" htmlUrl="https://stratechery.com" nf:id="stratechery" nf:class="publisher" nf:poll="30" />
+      <outline type="rss" text="Benedict Evans" title="Benedict Evans" xmlUrl="https://www.ben-evans.com/benedictevans?format=rss" htmlUrl="https://www.ben-evans.com" nf:id="benedict-evans" nf:class="publisher" nf:poll="30" />
+      <outline type="rss" text="Daring Fireball" title="Daring Fireball" xmlUrl="https://daringfireball.net/feeds/main" htmlUrl="https://daringfireball.net" nf:id="daring-fireball" nf:class="publisher" nf:poll="30" />
+      <outline type="rss" text="Schneier on Security" title="Schneier on Security" xmlUrl="https://www.schneier.com/feed/atom/" htmlUrl="https://www.schneier.com" nf:id="schneier" nf:class="publisher" nf:poll="30" />
+      <outline type="rss" text="Troy Hunt" title="Troy Hunt" xmlUrl="https://www.troyhunt.com/rss/" htmlUrl="https://www.troyhunt.com" nf:id="troy-hunt" nf:class="publisher" nf:poll="30" />
+      <outline type="rss" text="Calculated Risk" title="Calculated Risk" xmlUrl="https://www.calculatedriskblog.com/feeds/posts/default" htmlUrl="https://www.calculatedriskblog.com" nf:id="calculated-risk" nf:class="publisher" nf:poll="30" />
+      <outline type="rss" text="Marginal Revolution" title="Marginal Revolution" xmlUrl="https://marginalrevolution.com/feed" htmlUrl="https://marginalrevolution.com" nf:id="marginal-revolution" nf:class="publisher" nf:poll="30" />
+      <outline type="rss" text="Noahpinion" title="Noahpinion" xmlUrl="https://www.noahpinion.blog/feed" htmlUrl="https://www.noahpinion.blog" nf:id="noahpinion" nf:class="publisher" nf:poll="30" />
+    </outline>
+  </body>
+</opml>

@@ -10,11 +10,12 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from .feeds import CATEGORIES, FEEDS, REGION_ALL_LABELS, REGIONS
+from .feeds import DEFAULT, FeedList, default_opml_path
 from .fetcher import Fetcher
+from .opml import write_opml
 from .store import DISPLAY_HOURS, RETENTION_DAYS, Store
 from .trending import TrendingEngine
 
@@ -30,8 +31,14 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
     data_dir = data_dir or Path(os.environ.get("NEWSFEED_DATA_DIR", "data"))
 
     store = Store(":memory:" if demo else data_dir / "newsfeed.db")
-    fetcher = Fetcher(store)
-    trending = TrendingEngine(store)
+    # Demo mode uses the bundled list; otherwise the editable OPML in the data dir.
+    feed_list = None if demo else FeedList(default_opml_path(data_dir), data_dir / "import.opml")
+
+    def catalog():
+        return feed_list.catalog if feed_list else DEFAULT
+
+    fetcher = Fetcher(store, feed_list=feed_list) if feed_list else Fetcher(store)
+    trending = TrendingEngine(store, categories=lambda: catalog().categories)
 
     async def loop() -> None:
         while True:
@@ -65,14 +72,16 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
 
     @app.get("/api/meta")
     def meta() -> dict:
+        cat = catalog()
         return {
             "window_hours": DISPLAY_HOURS,
             "retention_days": RETENTION_DAYS,
-            "categories": CATEGORIES,
-            "regions": REGIONS,
-            "region_all_labels": REGION_ALL_LABELS,
+            "categories": cat.categories,
+            "regions": cat.regions,
+            "region_all_labels": cat.region_all_labels,
             "sources": [{"id": f.id, "name": f.name, "category": f.category, "source_class": f.source_class,
-                         "region": f.region} for f in FEEDS],
+                         "region": f.region} for f in cat.feeds],
+            "feed_list_error": feed_list.error if feed_list else None,
             "total": store.count(hours=DISPLAY_HOURS),
             "stored": store.count(),
             "last_refresh": store.last_refresh,
@@ -128,6 +137,12 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
     @app.get("/api/feeds")
     def feeds() -> list[dict]:
         return fetcher.status()
+
+    @app.get("/export.opml")
+    def export_opml() -> Response:
+        """The current feed list as OPML, for importing into another reader."""
+        return Response(write_opml(catalog()), media_type="text/x-opml; charset=utf-8",
+                        headers={"Content-Disposition": 'attachment; filename="newsfeed.opml"'})
 
     @app.get("/")
     def index() -> FileResponse:

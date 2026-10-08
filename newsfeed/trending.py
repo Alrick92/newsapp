@@ -13,9 +13,11 @@ import os
 import re
 import time
 from collections import Counter
+from collections.abc import Callable
+from functools import lru_cache
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from .ai import AIError, Provider, provider_from_env
 from .feeds import CATEGORIES, PUBLISHER
@@ -31,30 +33,33 @@ AI_INTERVAL = float(os.environ.get("NEWSFEED_AI_REFRESH_HOURS") or 4) * 3600
 HEURISTIC_INTERVAL = int(os.environ.get("NEWSFEED_TRENDING_MINUTES") or 30) * 60
 MAX_STORIES = 12
 
-# Must list the keys of feeds.CATEGORIES (a test checks they match).
-Category = Literal["world", "politics", "ai", "tech", "security", "economy", "local", "blogs"]
+@lru_cache(maxsize=8)
+def result_schema(categories: tuple[str, ...]) -> type[BaseModel]:
+    """The reply schema for a given category list (the OPML's folders can change at runtime).
+
+    extra="forbid" emits additionalProperties: false, which strict JSON-schema modes require.
+    """
+    forbid = ConfigDict(extra="forbid")
+    story = create_model(
+        "TrendingStory", __config__=forbid,
+        headline=(str, Field(description="Neutral, specific headline for the event, under 90 characters")),
+        summary=(str, Field(description="Two or three sentences on what happened, drawn only from the listed items")),
+        why_trending=(str, Field(description="One sentence on why this is gaining attention (breadth of coverage, escalation, impact)")),
+        category=(Literal[categories], ...),
+        item_ids=(list[int], Field(description="Item numbers from the input that cover this event")),
+        momentum=(int, Field(description="1-100: how strongly this story is trending right now")),
+    )
+    return create_model("TrendingResult", __config__=forbid, stories=(list[story], ...))
 
 
-class TrendingStory(BaseModel):
-    # extra="forbid" emits additionalProperties: false, which strict JSON-schema modes require.
-    model_config = ConfigDict(extra="forbid")
-
-    headline: str = Field(description="Neutral, specific headline for the event, under 90 characters")
-    summary: str = Field(description="Two or three sentences on what happened, drawn only from the listed items")
-    why_trending: str = Field(description="One sentence on why this is gaining attention (breadth of coverage, escalation, impact)")
-    category: Category
-    item_ids: list[int] = Field(description="Item numbers from the input that cover this event")
-    momentum: int = Field(description="1-100: how strongly this story is trending right now")
+# Schema for the bundled category list (used by tests and as the default).
+TrendingResult = result_schema(tuple(CATEGORIES))
+TrendingStory = TrendingResult.model_fields["stories"].annotation.__args__[0]
 
 
-class TrendingResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    stories: list[TrendingStory]
-
-
-SYSTEM_PROMPT = f"""You are the trending-desk editor for a news aggregator that shows the last 72 hours of \
-headlines from {len(CATEGORIES)} sections: {", ".join(CATEGORIES.values())}.
+def system_prompt(categories: dict[str, str]) -> str:
+    return f"""You are the trending-desk editor for a news aggregator that shows the last 72 hours of \
+headlines from {len(categories)} sections: {", ".join(categories.values())}.
 
 You receive numbered items (age in hours, source, source class, section, title, snippet). Identify the \
 events that are trending: the same underlying story covered by several independent outlets, a story \
@@ -69,6 +74,9 @@ authoritative but do not count as independent corroboration.
 Return at most {MAX_STORIES} stories, strongest first, spread across sections where the news supports it. \
 Write headlines and summaries only from what the items say; do not add facts, figures or speculation. \
 Skip routine items that nothing else echoes."""
+
+
+SYSTEM_PROMPT = system_prompt(CATEGORIES)
 
 
 def _render_items(items: list[Item], now: float) -> str:
@@ -99,10 +107,12 @@ def _story_payload(headline: str, summary: str, why: str, category: str, momentu
     }
 
 
-async def ai_trending(items: list[Item], now: float, provider: Provider) -> list[dict]:
+async def ai_trending(items: list[Item], now: float, provider: Provider,
+                      categories: dict[str, str] | None = None) -> list[dict]:
     """Ask the provider to cluster `items`; map its item numbers back to stories."""
     user = f"Current items ({len(items)}):\n\n{_render_items(items, now)}"
-    result = await provider.generate(SYSTEM_PROMPT, user, TrendingResult)
+    categories = categories or CATEGORIES
+    result = await provider.generate(system_prompt(categories), user, result_schema(tuple(categories)))
     stories = []
     for story in result.stories[:MAX_STORIES]:
         members = [items[n] for n in dict.fromkeys(story.item_ids) if 0 <= n < len(items)]
@@ -165,8 +175,10 @@ def heuristic_trending(items: list[Item], now: float) -> list[dict]:
 
 
 class TrendingEngine:
-    def __init__(self, store: Store, provider: Provider | None = None):
+    def __init__(self, store: Store, provider: Provider | None = None,
+                 categories: Callable[[], dict[str, str]] | None = None):
         self.store = store
+        self._categories = categories or (lambda: CATEGORIES)
         self.stories: list[dict] = []
         self.mode = "none"  # "ai" | "heuristic" | "none"
         self.provider_name: str | None = None
@@ -244,7 +256,7 @@ class TrendingEngine:
                 self._last_ai = {"at": now, "provider": provider.name, "model": provider.model}
                 self.store.set_meta("trending_ai_last_request", self._last_ai)
                 try:
-                    self.stories = await ai_trending(items, now, provider)
+                    self.stories = await ai_trending(items, now, provider, self._categories())
                     self.mode, self.provider_name, self.model = "ai", provider.name, provider.model
                 except AIError as exc:
                     log.warning("%s trending failed, using keyword clustering: %s", provider.name, exc)
