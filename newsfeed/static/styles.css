@@ -360,8 +360,10 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .act--star[aria-pressed="true"] { color: var(--accent-strong); border-color: var(--accent); background: var(--accent-soft); }
 .act--star[aria-pressed="true"] svg { fill: currentColor; }
 .act--summary { margin-left: auto; }
-.act--compare { margin-left: auto; }
-.act--summary:not([hidden]) + .act--compare { margin-left: 0; }
+/* The first visible extra action (Summarize, Copy sources, Compare) sits at the right. */
+.act--copy, .act--compare { margin-left: auto; }
+.act--summary:not([hidden]) ~ .act--copy, .act--summary:not([hidden]) ~ .act--compare,
+.act--copy:not([hidden]) ~ .act--compare { margin-left: 0; }
 
 /* ---- story groups and coverage comparisons -------------------------------- */
 .card__story { display: flex; flex-direction: column; gap: 8px; }
@@ -377,7 +379,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .compare__diffs { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.5; color: var(--text-2); }
 .compare .compare__note { font-size: 12px; color: var(--text-3); }
 .story__compare { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-.story__compare .act--compare { margin-left: 0; }
+.story__tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.story__tools .act { margin-left: 0; }
 .story__compare .compare { align-self: stretch; }
 
 .toast {

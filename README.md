@@ -148,6 +148,10 @@ OPML, so you can change any rating; the change shows on the next page load.
   read in the last 7, 30 or 90 days, next to the lean of everything your
   feeds published in that time, so you can tell your own habits apart from
   the mix of your feed list.
+- **Copy sources** (on trending stories, grouped stories and any card
+  carried by more than one feed): copies the headline, the coverage split,
+  and one line per article with its outlet, lean and link, as plain text
+  ready to paste into a message or document.
 - **Compare coverage** (on trending stories and grouped stories covered by
   at least two sides, when an AI provider is set up): the AI gets each
   side's headlines and feed snippets separately and describes what they

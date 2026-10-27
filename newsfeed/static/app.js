@@ -513,6 +513,65 @@ async function summarize(node, item) {
   }
 }
 
+// ---- copy sources ------------------------------------------------------------
+
+// Every outlet covering a story as plain text: headline, coverage split, then
+// one line per article with its source, lean and link, ready to paste anywhere.
+function sourcesText(headline, links, cov) {
+  const seen = new Set();
+  const rows = links.filter((l) => l.url && !seen.has(l.url) && seen.add(l.url));
+  const lines = [headline];
+  const sources = new Set(rows.map((l) => l.source)).size;
+  let summary = `${sources} ${sources === 1 ? "source" : "sources"}`;
+  if (cov?.rated) {
+    const pct = (n) => Math.round((100 * n) / cov.rated);
+    summary += " · " + SIDES.map(([side, name]) => `${name} ${pct(cov.sides[side])}%`).join(" · ");
+  }
+  lines.push(summary, "");
+  for (const l of rows) {
+    const bias = sourceInfo(l.source_id)?.bias;
+    lines.push(`- ${l.source}${bias ? ` (${BIAS_LABEL[bias]})` : ""}: ${l.title}`, `  ${l.url}`);
+  }
+  return { text: lines.join("\n"), count: rows.length };
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // The async clipboard needs HTTPS (or localhost); fall back for plain-HTTP setups.
+    const area = el("textarea", { style: "position:fixed;opacity:0", readonly: true });
+    area.value = text;
+    document.body.append(area);
+    area.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch {}
+    area.remove();
+    return ok;
+  }
+}
+
+function wireCopy(btn, build) {
+  btn.addEventListener("click", async () => {
+    const { text, count } = build();
+    if (await copyText(text)) {
+      toast(`Copied ${count} ${count === 1 ? "article" : "articles"} to the clipboard`);
+      btn.textContent = "Copied";
+      setTimeout(() => { btn.textContent = "Copy sources"; }, 1600);
+    } else {
+      toast("Couldn't copy: the browser blocked clipboard access.");
+    }
+  });
+}
+
+// The lead article, the feeds that carried it ("Also in") and the rest of its story.
+function cardLinks(item) {
+  const own = (i) => [{ title: i.title, url: i.url, source: i.source, source_id: i.source_id },
+    ...(i.also || []).map((a) => ({ title: i.title, url: a.url, source: a.source, source_id: a.source_id }))];
+  return [...own(item), ...(item.story?.items || []).map((m) => ({ title: m.title, url: m.url, source: m.source, source_id: m.source_id }))];
+}
+
 // ---- compare coverage --------------------------------------------------------
 
 function canCompare(cov) {
@@ -605,6 +664,12 @@ function card(item) {
   if (item.story?.items.length) {
     node.querySelector(".card__story").replaceWith(storyBlock(item));
     node.classList.add("card--story");
+  }
+  const links = cardLinks(item);
+  if (links.length > 1) {
+    const copy = node.querySelector(".act--copy");
+    copy.hidden = false;
+    wireCopy(copy, () => sourcesText(item.title, links, item.story?.coverage));
   }
   if (item.story && canCompare(item.story.coverage)) {
     const btn = node.querySelector(".act--compare");
@@ -791,16 +856,24 @@ function story(s, rank, aiWritten) {
       // Only an AI writes a real reason; keyword clustering would just restate the source count.
       aiWritten && s.why_trending ? el("p", { class: "story__why", text: s.why_trending }) : null,
       s.coverage ? coverageBlock(s.coverage) : null,
-      canCompare(s.coverage) ? compareControl(s.items.map((it) => it.id)) : null,
+      storyTools(s),
       sources,
       more > 0 ? el("p", { class: "src-more", text: `${more} more ${more === 1 ? "source" : "sources"}` }) : null));
 }
 
-function compareControl(ids) {
+// Copy sources, and Compare coverage when at least two sides cover the story.
+function storyTools(s) {
+  const copy = el("button", { class: "act act--copy", type: "button", text: "Copy sources",
+    title: "Copy every outlet's headline and link" });
+  wireCopy(copy, () => sourcesText(s.headline, s.items, s.coverage));
+  const row = el("div", { class: "story__tools" }, copy);
   const box = el("div", { class: "compare", hidden: true });
-  const btn = el("button", { class: "act act--compare", type: "button", text: "Compare coverage" });
-  btn.addEventListener("click", () => compareCoverage(btn, box, ids));
-  return el("div", { class: "story__compare" }, btn, box);
+  if (canCompare(s.coverage)) {
+    const btn = el("button", { class: "act act--compare", type: "button", text: "Compare coverage" });
+    btn.addEventListener("click", () => compareCoverage(btn, box, s.items.map((it) => it.id)));
+    row.append(btn);
+  }
+  return el("div", { class: "story__compare" }, row, box);
 }
 
 async function loadTrending(force = false) {
