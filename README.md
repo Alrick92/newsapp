@@ -32,6 +32,11 @@ private: see [Keep it private](#keep-it-private).
 - **Cards:** Mark read / Mark unread, Star, and Summarize. Opening a story
   marks it read. When several feeds carry the same story it's stored once and
   shows "Also in" links to the others, so it has one read state.
+- **Political lean:** each source can carry a rating (Left, Lean left,
+  Center, Lean right, Right) shown as a tag next to its name. Every trending
+  story gets a coverage bar: the share of its rated sources on the left, in
+  the center and on the right, each source counted once. See
+  [Coverage and bias](#coverage-and-bias).
 - **Search** covers titles and the full text each feed provides (SQLite
   FTS5). Results come best match first, with the matching words highlighted;
   the last word matches as a prefix, so results appear as you type.
@@ -109,11 +114,47 @@ Politics). The app ships 71 curated feeds in `newsfeed/feeds.opml`.
   `nf:poll` (minutes between checks, minimum 5), `nf:class` (`publisher`,
   `official-lab`, `vendor-security`, `government-advisory`, `institutional` or
   `community/blog`; non-publishers don't count as independent coverage in
-  trending), `nf:id`, and on folders `nf:key`, `nf:region` and `nf:allLabel`.
+  trending), `nf:bias` (`left`, `lean-left`, `center`, `lean-right` or
+  `right`), `nf:factuality` (`very-high`, `high`, `mixed` or `low`), `nf:id`,
+  and on folders `nf:key`, `nf:region` and `nf:allLabel`. An unknown
+  `nf:bias` or `nf:factuality` value is treated as unrated.
 - **Exporting:** open `/export.opml` in the browser, or run
   `python -m newsfeed export-opml my-feeds.opml`
   (Docker: `docker compose exec newsfeed python -m newsfeed export-opml > my-feeds.opml`).
   The file imports into Feedly, Inoreader, NetNewsWire and other readers.
+
+## Coverage and bias
+
+Like Ground News, the app shows *who* is covering a story, not only how
+many outlets. All of it comes from the `nf:bias` rating on each feed in your
+OPML, so you can change any rating; the change shows on the next page load.
+
+- **Coverage bar:** each trending story shows the share of its rated
+  sources that lean left (Left + Lean left), center, or right (Lean right +
+  Right). Unrated sources are listed as "N unrated" and never assigned a
+  side.
+- **Blindspots:** a story is a blindspot when at least 3 rated sources cover
+  it and at least three quarters of them are on one side, so readers of the
+  other side are likely to miss it. Trending → **Blindspots** shows only
+  those stories. A story covered mostly by center outlets isn't a
+  blindspot.
+- **My bias** (header button): the lean of the stories you opened or marked
+  read in the last 7, 30 or 90 days, next to the lean of everything your
+  feeds published in that time, so you can tell your own habits apart from
+  the mix of your feed list.
+
+**About the bundled ratings.** The ratings in `newsfeed/feeds.opml` are a
+starting point written for this project. They aren't taken from AllSides,
+Ad Fontes Media or Media Bias/Fact Check, whose ratings are their own work.
+Review them, and change any you disagree with. Only general news outlets in
+World, Politics and Economy are rated. Tech, security, AI, local and blog
+feeds are unrated, because a left/right split says little about them. No
+bundled feed has an `nf:factuality` value; add your own if you want the
+label.
+
+Coverage bars are only as fair as the feed list. A list made mostly of
+outlets from one side makes nearly every story look like a blindspot, so
+keep each section balanced when you add feeds.
 
 ## Keep it private
 
@@ -183,21 +224,27 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
 
 ## The bundled feeds
 
-- **71 feeds** in [`newsfeed/feeds.opml`](newsfeed/feeds.opml): the 15-feed
+- **90 feeds** in [`newsfeed/feeds.opml`](newsfeed/feeds.opml): the 15-feed
   production bundle from the RSS research brief, plus Microsoft Security,
   CISA, UN News, NPR, The Verge, WIRED (AI and Security), BBC Technology,
   IEEE Spectrum, Hugging Face and Krebs, and the groups below.
+- **World.** The Guardian, BBC News, Al Jazeera, DW, France 24, NPR, Sky
+  News, The Wall Street Journal, Fox News, the New York Post and the
+  Washington Examiner (foreign policy), plus UN News as a first-party source.
 - **Economy.** BBC Business, The Guardian Economics, CNBC Economy, NPR
-  Economy, DW Business and The Economist (finance & economics), plus the
+  Economy, DW Business, The Economist (finance & economics), WSJ Markets,
+  New York Post Business and Washington Examiner Economy, plus the
   Federal Reserve and the European Central Bank as first-party sources:
   their own announcements, so they add authority to a story but don't count
   as independent coverage.
 - **Politics, US and international.** Picking Politics shows a second
   dropdown: US, International, or both.
   - US: NPR Politics, PBS NewsHour, The New York Times, The Guardian US,
-    The Hill, Roll Call (Congress), SCOTUSblog (Supreme Court)
+    CBS News, NBC News, The Hill, Roll Call (Congress), SCOTUSblog (Supreme
+    Court), NewsNation, Fox News Politics, New York Post Politics,
+    Washington Examiner Politics, National Review, The Dispatch, Reason
   - International: BBC Politics, The Guardian Politics, POLITICO Europe,
-    CBC Politics (Canada), Foreign Policy
+    CBC Politics (Canada), Foreign Policy, Sky News Politics, GB News
 - **Local, by state.** Picking Local shows a second dropdown to narrow it to
   one state (the choice is kept in the link, e.g. `#view=latest&cat=local&region=PA`).
   - Georgia: Georgia Recorder, Rough Draft Atlanta, Atlanta Civic Circle
@@ -349,12 +396,13 @@ only the rows they need, so stories aren't held in memory.
 | `POST /api/items/{id}/summary` | Summarize from the feed text (saved; 404 without a provider, 422 for teasers, 429 over the hourly limit) |
 | `GET /export.opml` | The feed list as OPML |
 | `GET /manifest.webmanifest`, `GET /sw.js` | App manifest and service worker (installable app, offline) |
-| `GET /api/trending` | Cached trending stories (starts a regeneration if stale) |
+| `GET /api/trending` | Cached trending stories (starts a regeneration if stale); each has `coverage` with counts per bias and side, and `blindspot` (`"left"`, `"right"` or null: the side that barely covers it) |
+| `GET /api/bias?days=30` | My News Bias: stories read, and stories published, per side (`left`, `center`, `right`, `unrated`) over the last `days` |
 | `POST /api/trending/refresh` | Regenerate trending now |
 | `POST /api/refresh` | Poll every feed now |
 | `GET /api/feeds` | Per-feed health: last success, last error, stories in the last 72h |
 | `GET /healthz` | Health check for the load balancer and Docker |
-| `GET /api/meta` | Categories, regions, sources, totals, starred count, whether summaries are on, feed-list errors |
+| `GET /api/meta` | Categories, regions, sources (with `bias` and `factuality`), totals, starred count, whether summaries are on, feed-list errors |
 
 ## Configuration
 

@@ -9,10 +9,15 @@ const FIRST_PARTY = new Set(["official-lab", "vendor-security", "government-advi
 const EXT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg>';
 const VIEWS = [["trending", "Trending"], ["latest", "Latest"], ["starred", "Starred"]];
+// Political lean from each feed's nf:bias rating; feeds without one are unrated.
+const BIAS_LABEL = { left: "Left", "lean-left": "Lean left", center: "Center", "lean-right": "Lean right", right: "Right" };
+const SIDE_OF = { left: "left", "lean-left": "left", center: "center", "lean-right": "right", right: "right" };
+const SIDES = [["left", "Left"], ["center", "Center"], ["right", "Right"]];
+const FACTUALITY_LABEL = { "very-high": "Very high factuality", high: "High factuality", mixed: "Mixed factuality", low: "Low factuality" };
 
 const $ = (sel) => document.querySelector(sel);
 const state = { view: "trending", category: "", region: "", q: "", hours: 72, sources: new Set(), sort: "newest",
-  hasImage: false, unreadOnly: false, offset: 0 };
+  hasImage: false, unreadOnly: false, blindspot: false, offset: 0 };
 let meta = null;
 let trendingTimer = null;
 let counts = null; // per-category totals for the current filters, once loaded
@@ -88,6 +93,61 @@ function media(container, image, category, label) {
   } else {
     container.append(placeholder(category, label));
   }
+}
+
+// ---- political lean ---------------------------------------------------------
+
+function sourceInfo(id) {
+  return meta?.sources.find((s) => s.id === id);
+}
+
+// A small "Lean left" style tag for a feed, or null when it's unrated.
+function leanTag(sourceId) {
+  const src = sourceInfo(sourceId);
+  if (!src?.bias) return null;
+  const title = [`${BIAS_LABEL[src.bias]} (from your feed list)`, FACTUALITY_LABEL[src.factuality]].filter(Boolean).join(" · ");
+  return el("span", { class: `lean lean--${SIDE_OF[src.bias]}`, text: BIAS_LABEL[src.bias], title });
+}
+
+// A left/center/right bar. `sides` holds counts; widths are shares of the rated total.
+function leanBar(sides, label) {
+  const rated = SIDES.reduce((n, [side]) => n + (sides[side] || 0), 0);
+  const bar = el("div", { class: "lean-bar", role: "img", "aria-label": label });
+  if (!rated) {
+    bar.classList.add("is-empty");
+    return bar;
+  }
+  for (const [side] of SIDES) {
+    if (sides[side]) bar.append(el("span", { class: `lean-bar__seg lean--${side}`, style: `flex-grow:${sides[side]}` }));
+  }
+  return bar;
+}
+
+function leanLegend(sides, unit) {
+  const rated = SIDES.reduce((n, [side]) => n + (sides[side] || 0), 0);
+  const pct = (n) => (rated ? Math.round((100 * n) / rated) : 0);
+  return el("p", { class: "lean-legend" }, ...SIDES.map(([side, name]) =>
+    el("span", { class: `lean-legend__item lean--${side}`, title: `${sides[side] || 0} ${unit}` }, `${name} ${pct(sides[side] || 0)}%`)));
+}
+
+function coverageBlock(cov) {
+  const rated = cov.rated;
+  const parts = SIDES.map(([side, name]) => `${cov.sides[side]} ${name.toLowerCase()}`).join(", ");
+  const label = rated ? `Coverage by lean: ${parts}` : "No rated sources";
+  const box = el("div", { class: "coverage" });
+  if (cov.blindspot) {
+    const other = cov.blindspot === "right" ? "left" : "right";
+    box.append(el("p", { class: `blindspot lean--${other}`,
+      title: `At least three quarters of the rated sources covering this lean ${other}` },
+    el("strong", { text: "Blindspot" }), ` · little coverage from the ${cov.blindspot}`));
+  }
+  if (rated) {
+    box.append(leanBar(cov.sides, label), leanLegend(cov.sides, "sources"));
+    if (cov.unrated) box.lastChild.append(el("span", { class: "lean-legend__unrated", text: `${cov.unrated} unrated` }));
+  } else {
+    box.append(el("p", { class: "lean-legend", text: "No rated sources for this story" }));
+  }
+  return box;
 }
 
 class OfflineError extends Error {}
@@ -199,6 +259,7 @@ function readHash() {
   state.sort = ["source", "relevance"].includes(p.get("sort")) ? p.get("sort") : "newest";
   state.hasImage = p.get("img") === "1";
   state.unreadOnly = p.get("unread") === "1";
+  state.blindspot = p.get("blindspot") === "1";
 }
 
 function writeHash() {
@@ -212,6 +273,7 @@ function writeHash() {
   if (state.sort !== "newest") p.set("sort", state.sort);
   if (state.hasImage) p.set("img", "1");
   if (state.unreadOnly) p.set("unread", "1");
+  if (state.blindspot) p.set("blindspot", "1");
   const hash = p.toString();
   history.replaceState(null, "", hash ? `#${hash}` : location.pathname);
 }
@@ -443,6 +505,8 @@ function card(item) {
   chip.textContent = item.source;
   chip.style.setProperty("--c", catColor(item.category));
   if (FIRST_PARTY.has(item.source_class)) chip.title = `First-party source (${item.source_class})`;
+  const lean = leanTag(item.source_id);
+  if (lean) chip.after(lean);
   const time = node.querySelector("time");
   time.dateTime = new Date(item.published * 1000).toISOString();
   time.textContent = timeAgo(item.published);
@@ -626,6 +690,7 @@ function story(s, rank, aiWritten) {
       el("a", { class: "src-title", href: safeHref(it.url), target: "_blank", rel: "noopener noreferrer", text: it.title }),
       el("span", { class: "src-meta" },
         el("span", { class: "src-name", text: it.source }),
+        leanTag(it.source_id),
         FIRST_PARTY.has(it.source_class) ? el("span", { class: "src-first", text: "first-party", title: "The organization's own announcement; not independent coverage" }) : null,
         el("span", { text: timeAgo(it.published) })))));
   const more = s.items.length - limit;
@@ -641,6 +706,7 @@ function story(s, rank, aiWritten) {
       el("p", { class: "story__summary", text: s.summary }),
       // Only an AI writes a real reason; keyword clustering would just restate the source count.
       aiWritten && s.why_trending ? el("p", { class: "story__why", text: s.why_trending }) : null,
+      s.coverage ? coverageBlock(s.coverage) : null,
       sources,
       more > 0 ? el("p", { class: "src-more", text: `${more} more ${more === 1 ? "source" : "sources"}` }) : null));
 }
@@ -689,12 +755,18 @@ function renderTrending() {
   }
 
   const inRegion = regionSources();
+  for (const b of $("#trending-mode").children) b.setAttribute("aria-checked", String((b.dataset.blindspot === "1") === state.blindspot));
   const stories = data.stories.filter((s) => (!state.category || s.category === state.category)
-    && (!inRegion || s.items.some((it) => inRegion.has(it.source_id))));
+    && (!inRegion || s.items.some((it) => inRegion.has(it.source_id)))
+    && (!state.blindspot || s.coverage?.blindspot));
   const pending = data.running || !data.generated_at;
   if (stories.length) {
     const aiWritten = data.mode === "ai" || data.mode === "claude";
     box.replaceChildren(...stories.map((s, i) => story(s, i + 1, aiWritten)));
+  } else if (data.stories.length && state.blindspot) {
+    box.replaceChildren(el("div", { class: "empty" },
+      el("h3", { text: "No blindspots right now" }),
+      el("p", { text: "Every trending story here is covered from more than one side, or has too few rated sources to tell." })));
   } else if (data.stories.length) {
     box.replaceChildren(el("div", { class: "empty" },
       el("h3", { text: `Nothing trending in ${inRegion ? meta.regions[state.category][state.region] : meta.categories[state.category]}` }),
@@ -799,7 +871,55 @@ function wire() {
     }
   });
   $("#trending-refresh").addEventListener("click", () => loadTrending(true));
+  $("#trending-mode").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    state.blindspot = b.dataset.blindspot === "1";
+    writeHash();
+    if (trendingData) renderTrending();
+  });
+  $("#bias-open").addEventListener("click", () => openBias());
+  $("#bias-close").addEventListener("click", () => $("#bias-dialog").close());
+  $("#bias-dialog").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
   window.addEventListener("hashchange", () => { readHash(); render(); });
+}
+
+// ---- my news bias ----------------------------------------------------------
+
+let biasDays = 30;
+
+function biasRow(title, counts, unit) {
+  const rated = SIDES.reduce((n, [side]) => n + counts[side], 0);
+  const sub = `${rated.toLocaleString()} rated ${unit}${counts.unrated ? ` · ${counts.unrated.toLocaleString()} unrated` : ""}`;
+  return el("div", { class: "bias-row" },
+    el("div", { class: "bias-row__head" }, el("strong", { text: title }), el("span", { text: sub })),
+    leanBar(counts, `${title}: ${SIDES.map(([side, name]) => `${counts[side]} ${name.toLowerCase()}`).join(", ")}`),
+    leanLegend(counts, unit));
+}
+
+async function loadBias() {
+  const body = $("#bias-body");
+  $("#bias-days").replaceChildren(...[7, 30, 90].filter((d) => d <= (meta?.retention_days || 90)).map((d) => {
+    const b = el("button", { type: "button", role: "radio", "aria-checked": String(d === biasDays), text: `${d} days` });
+    b.addEventListener("click", () => { biasDays = d; loadBias(); });
+    return b;
+  }));
+  let data;
+  try {
+    data = await api(`/api/bias?days=${biasDays}`);
+  } catch (err) {
+    body.replaceChildren(el("p", { class: "lean-legend", text: `Couldn't load: ${err.message}` }));
+    return;
+  }
+  const readRated = SIDES.reduce((n, [side]) => n + data.read[side], 0);
+  body.replaceChildren(biasRow("What you read", data.read, "stories"), biasRow("What your feeds published", data.published, "stories"));
+  if (!readRated) body.append(el("p", { class: "lean-legend", text: "Nothing read from a rated source in this period yet." }));
+}
+
+function openBias() {
+  const dialog = $("#bias-dialog");
+  if (!dialog.open) dialog.showModal();
+  loadBias();
 }
 
 // ---- installable app -------------------------------------------------------

@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 
+from .bias import reading_profile, with_coverage
 from .feeds import DEFAULT, FeedList, default_opml_path
 from .fetcher import Fetcher
 from .opml import write_opml
@@ -107,7 +108,7 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
             "regions": cat.regions,
             "region_all_labels": cat.region_all_labels,
             "sources": [{"id": f.id, "name": f.name, "category": f.category, "source_class": f.source_class,
-                         "region": f.region} for f in cat.feeds],
+                         "region": f.region, "bias": f.bias, "factuality": f.factuality} for f in cat.feeds],
             "feed_list_error": feed_list.error if feed_list else None,
             "summaries_enabled": summarizer.enabled,
             "starred": store.starred_count(),
@@ -177,11 +178,16 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
             raise HTTPException(exc.status, str(exc)) from None
         return {"summary": summary, "cached": cached}
 
+    def trending_snapshot() -> dict:
+        # Coverage is worked out per request so an edited nf:bias applies at once.
+        snap = trending.snapshot()
+        return {**snap, "stories": with_coverage(snap["stories"], catalog().by_id)}
+
     @app.get("/api/trending")
     async def get_trending() -> dict:
         if trending.stale() and not trending.running:
             asyncio.create_task(trending.update())
-        return trending.snapshot()
+        return trending_snapshot()
 
     @app.post("/api/refresh")
     async def refresh() -> dict:
@@ -196,7 +202,14 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
         # Throttled like every other trigger: within the AI window this returns
         # the current stories with throttled=true and next_ai_refresh_at set.
         ran = await trending.update(force=True)
-        return {**trending.snapshot(), "throttled": not ran and trending.next_ai_at() is not None}
+        return {**trending_snapshot(), "throttled": not ran and trending.next_ai_at() is not None}
+
+    @app.get("/api/bias")
+    def reading_bias(days: int = Query(30, ge=1, le=RETENTION_DAYS)) -> dict:
+        """My News Bias: the lean of the stories you read vs. what your feeds published."""
+        profile = reading_profile(store.read_source_counts(days), store.source_counts(hours=days * 24),
+                                  catalog().by_id)
+        return {"days": days, **profile}
 
     @app.get("/healthz")
     def healthz() -> dict:

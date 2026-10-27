@@ -35,6 +35,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14"/></svg>
           <span>Install</span>
         </button>
+        <button class="btn btn--ghost" id="bias-open" type="button" title="The political lean of what you read">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M5 8h14M5 8l-3 7h6zM19 8l-3 7h6z"/></svg>
+          <span>My bias</span>
+        </button>
         <button class="btn btn--ghost" id="refresh" type="button" title="Poll feeds now">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
           <span>Refresh</span>
@@ -93,7 +97,14 @@
           <h2 class="section-title">Trending now</h2>
           <p class="section-sub" id="trending-sub"></p>
         </div>
-        <button class="btn btn--ghost" id="trending-refresh" type="button">Regenerate</button>
+        <div class="trending-actions">
+          <div class="segmented" id="trending-mode" role="radiogroup" aria-label="Stories to show">
+            <button type="button" role="radio" data-blindspot="0" aria-checked="true">All stories</button>
+            <button type="button" role="radio" data-blindspot="1" aria-checked="false"
+                    title="Stories covered mostly by one side of the spectrum">Blindspots</button>
+          </div>
+          <button class="btn btn--ghost" id="trending-refresh" type="button">Regenerate</button>
+        </div>
       </div>
       <div id="trending" class="trending"></div>
     </section>
@@ -104,6 +115,19 @@
       <div class="more"><button class="btn btn--ghost" id="more" type="button" hidden>Load more</button></div>
     </section>
   </main>
+
+  <dialog class="bias-dialog" id="bias-dialog" aria-labelledby="bias-title">
+    <div class="bias-dialog__head">
+      <h2 class="section-title" id="bias-title">My news bias</h2>
+      <button class="btn btn--icon" id="bias-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="segmented" id="bias-days" role="radiogroup" aria-label="Period"></div>
+    <div id="bias-body" class="bias-body"></div>
+    <p class="bias-note">Based on the stories you opened or marked read, and on each feed's <code>nf:bias</code>
+      rating in your feed list. Unrated feeds (most tech, security, local and blog sources) aren't counted on either side.</p>
+  </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden>
     <span id="toast-text"></span>

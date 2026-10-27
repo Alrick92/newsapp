@@ -359,6 +359,13 @@ class Store:
                                     (time.time() - hours * 3600,)).fetchall()
         return {r[0]: r[1] for r in rows}
 
+    def read_source_counts(self, days: float, now: float | None = None) -> dict[str, int]:
+        """Stories marked read in the last `days`, per feed."""
+        with self._lock:
+            rows = self._db.execute("SELECT source_id, COUNT(*) FROM items WHERE read_at >= ? GROUP BY source_id",
+                                    ((now or time.time()) - days * 86400,)).fetchall()
+        return {r[0]: r[1] for r in rows}
+
     def missing_images(self, limit: int) -> list[Item]:
         """Newest image-less items that have not had an og:image lookup yet."""
         with self._lock:

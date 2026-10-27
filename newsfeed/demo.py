@@ -115,6 +115,25 @@ _SAMPLES = [
      "What worked, what didn't, and the prompt that finally produced valid JSON.", False),
     ("calculated-risk", 9, "Existing home sales edge up in latest monthly report",
      "Inventory continues to rise from last year's lows, while median prices are roughly flat.", False),
+    # Coverage across the spectrum (appended last so earlier sample indexes stay stable):
+    # the fisheries and stopgap stories gain right-leaning sources, and two stories
+    # are covered by one side only, so demo mode shows a blindspot of each kind.
+    ("fox-world", 4, "Eleven nations sign draft fisheries patrol framework",
+     "The deal creates joint patrol zones; critics say enforcement details remain vague.", True),
+    ("examiner-politics", 4, "Senate stopgap funding bill passes ahead of shutdown deadline",
+     "Conservatives objected to the length of the extension but most voted in favor.", True),
+    ("fox-politics", 2, "Watchdog report finds missing records at federal housing grant office",
+     "The inspector general said thousands of grant files could not be located.", True),
+    ("nypost-politics", 3, "Federal housing grant office lost track of records, watchdog report says",
+     "The report covers grants awarded over a five-year period.", True),
+    ("national-review", 5, "What the housing grant watchdog report reveals about missing records",
+     "The findings raise questions about oversight of billions in grants.", False),
+    ("nyt-politics", 3, "Rural clinics warn of closures after state funding formula change",
+     "Administrators in several states say the new formula cuts their budgets by a third.", True),
+    ("guardian-us-politics", 5, "Rural clinics face closures as funding formula shifts",
+     "Patients may have to travel hours for routine care, providers say.", True),
+    ("cbs-politics", 6, "Funding formula change puts rural clinics at risk of closures",
+     "State officials say the change spreads money more evenly across regions.", False),
 ]
 
 

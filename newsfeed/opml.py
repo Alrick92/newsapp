@@ -9,6 +9,10 @@ ignore:
       <outline text="Georgia" nf:region="GA">
         <outline type="rss" text="Georgia Recorder" xmlUrl="https://…/feed/"
                  nf:id="georgia-recorder" nf:class="publisher" nf:poll="15"/>
+
+A feed may also carry `nf:bias` (left, lean-left, center, lean-right, right)
+and `nf:factuality` (very-high, high, mixed, low); any other value is read as
+unrated.
 """
 
 from __future__ import annotations
@@ -16,10 +20,10 @@ from __future__ import annotations
 import hashlib
 import re
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from urllib.parse import urlsplit
 
-from .model import PUBLISHER, Feed
+from .model import BIASES, FACTUALITY, PUBLISHER, Feed
 
 NS = "https://github.com/alrick92/newsapp/ns/opml"
 ET.register_namespace("nf", NS)
@@ -100,7 +104,11 @@ def read_opml(text: str | bytes) -> Catalog:
             poll = int(el.get(_NF + "poll") or IMPORTED_POLL_MINUTES)
         except ValueError:
             poll = IMPORTED_POLL_MINUTES
-        feeds.append(Feed(fid, name, url, category, el.get(_NF + "class") or PUBLISHER, max(5, poll), region))
+        bias = (el.get(_NF + "bias") or "").strip().lower()
+        factuality = (el.get(_NF + "factuality") or "").strip().lower()
+        feeds.append(Feed(fid, name, url, category, el.get(_NF + "class") or PUBLISHER, max(5, poll), region,
+                          bias if bias in BIASES else None,
+                          factuality if factuality in FACTUALITY else None))
 
     def walk(el: ET.Element, category: str | None, region: str | None) -> None:
         for child in el.findall("outline"):
@@ -130,11 +138,16 @@ def write_opml(cat: Catalog, title: str = "Newsfeed") -> str:
 
     def feed_el(parent: ET.Element, f: Feed) -> None:
         site = urlsplit(f.url)
-        ET.SubElement(parent, "outline", {
+        attrs = {
             "type": "rss", "text": f.name, "title": f.name, "xmlUrl": f.url,
             "htmlUrl": f"{site.scheme}://{site.netloc}",
             _NF + "id": f.id, _NF + "class": f.source_class, _NF + "poll": str(f.poll_minutes),
-        })
+        }
+        if f.bias:
+            attrs[_NF + "bias"] = f.bias
+        if f.factuality:
+            attrs[_NF + "factuality"] = f.factuality
+        ET.SubElement(parent, "outline", attrs)
 
     for key, label in cat.categories.items():
         attrs = {"text": label, "title": label, _NF + "key": key}
@@ -177,7 +190,7 @@ def merge(base: Catalog, extra: Catalog) -> tuple[Catalog, int]:
         fid = f.id if f.id not in taken else _feed_id(f.id, f.url, taken)
         taken.add(fid)
         known.add(_norm_url(f.url))
-        feeds.append(Feed(fid, f.name, f.url, key, f.source_class, f.poll_minutes, f.region))
+        feeds.append(replace(f, id=fid, category=key))
         added += 1
     all_labels = {**extra.region_all_labels, **base.region_all_labels}
     return Catalog(tuple(feeds), categories, regions, all_labels), added

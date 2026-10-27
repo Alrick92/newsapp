@@ -17,7 +17,7 @@ def test_bundled_list_round_trips_exactly():
     assert back.feeds == DEFAULT.feeds
     assert back.categories == DEFAULT.categories and back.regions == DEFAULT.regions
     assert back.region_all_labels == DEFAULT.region_all_labels
-    assert len(DEFAULT.feeds) == 71 and DEFAULT.regions["local"]["WV"] == "West Virginia"
+    assert len(DEFAULT.feeds) == 90 and DEFAULT.regions["local"]["WV"] == "West Virginia"
 
 
 def test_reads_a_feedly_export():
@@ -52,7 +52,7 @@ def test_feed_list_first_run_import_and_reload(tmp_path):
     (tmp_path / "import.opml").write_bytes(FEEDLY.read_bytes())
     fl = FeedList(tmp_path / "feeds.opml", tmp_path / "import.opml")
     assert (tmp_path / "feeds.opml").exists()
-    assert len(fl.catalog.feeds) == 75 and "cooking" in fl.catalog.categories
+    assert len(fl.catalog.feeds) == 94 and "cooking" in fl.catalog.categories
     assert not (tmp_path / "import.opml").exists() and (tmp_path / "import.opml.imported").exists()
 
     # Editing the file is picked up without a restart.
@@ -65,7 +65,7 @@ def test_feed_list_first_run_import_and_reload(tmp_path):
     (tmp_path / "feeds.opml").write_text("<opml><body>")
     os.utime(tmp_path / "feeds.opml", (time.time() + 10, time.time() + 10))
     assert not fl.reload_if_changed()
-    assert len(fl.catalog.feeds) == 75 and "feeds.opml" in fl.error
+    assert len(fl.catalog.feeds) == 94 and "feeds.opml" in fl.error
 
 
 def test_export_endpoint_and_meta_follow_the_file(tmp_path, monkeypatch):
@@ -73,7 +73,7 @@ def test_export_endpoint_and_meta_follow_the_file(tmp_path, monkeypatch):
     (tmp_path / "import.opml").write_bytes(FEEDLY.read_bytes())
     with TestClient(create_app(data_dir=tmp_path, poll=False)) as client:
         meta = client.get("/api/meta").json()
-        assert meta["categories"]["cooking"] == "Cooking" and len(meta["sources"]) == 75
+        assert meta["categories"]["cooking"] == "Cooking" and len(meta["sources"]) == 94
         resp = client.get("/export.opml")
         assert resp.status_code == 200 and "attachment" in resp.headers["content-disposition"]
-        assert len(read_opml(resp.content).feeds) == 75
+        assert len(read_opml(resp.content).feeds) == 94

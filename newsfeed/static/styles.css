@@ -52,6 +52,11 @@
   --cat-local: #c0398a;
   --cat-blogs: #5f6f80;
 
+  /* Political lean: left, center, right. */
+  --lean-left: #2f63c0;
+  --lean-center: #8a96a3;
+  --lean-right: #c8413b;
+
   --radius: 14px;
   color-scheme: light;
 }
@@ -69,6 +74,9 @@
     --accent: #2bb3a3;
     --accent-strong: #4fd1c1;
     --accent-soft: #12332f;
+    --lean-left: #6d9cf0;
+    --lean-center: #97a4b2;
+    --lean-right: #ee706a;
     --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px -14px rgb(0 0 0 / 60%);
     color-scheme: dark;
   }
@@ -85,6 +93,9 @@
   --accent: #2bb3a3;
   --accent-strong: #4fd1c1;
   --accent-soft: #12332f;
+  --lean-left: #6d9cf0;
+  --lean-center: #97a4b2;
+  --lean-right: #ee706a;
   --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px -14px rgb(0 0 0 / 60%);
   color-scheme: dark;
 }
@@ -278,8 +289,11 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 @media (max-width: 760px) {
   .masthead__inner, .tabs, .page, .footer { padding-left: 16px; padding-right: 16px; }
   .brand__name { font-size: 24px; }
-  #refresh span, #install span { display: none; }
-  #refresh, #install { width: 36px; padding: 0; justify-content: center; }
+  #refresh span, #install span, #bias-open span { display: none; }
+  #refresh, #install, #bias-open { width: 36px; padding: 0; justify-content: center; }
+  .trending-head { flex-wrap: wrap; }
+  .trending-actions { justify-content: flex-start; }
+  .trending-actions .segmented { order: 0; }
   .grid, .trending { grid-template-columns: 1fr; }
   .story--lead { display: flex; }
   .story--lead .story__media { min-height: 0; aspect-ratio: 16 / 9; }
@@ -293,6 +307,34 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   .badge--demo { padding: 0 8px; }
   .section-title { font-size: 26px; }
 }
+
+/* ---- political lean ----------------------------------------------------- */
+.lean--left { --lean: var(--lean-left); }
+.lean--center { --lean: var(--lean-center); }
+.lean--right { --lean: var(--lean-right); }
+.lean { font-size: 11px; font-weight: 500; letter-spacing: .02em; white-space: nowrap; color: var(--lean);
+  border: 1px solid color-mix(in srgb, var(--lean) 45%, transparent); border-radius: 4px; padding: 0 4px; }
+.card__meta .lean { flex: none; }
+.coverage { display: flex; flex-direction: column; gap: 6px; }
+.lean-bar { display: flex; gap: 2px; height: 8px; border-radius: 999px; overflow: hidden; background: var(--surface-2); }
+.lean-bar__seg { flex: 1 1 0; min-width: 4px; background: var(--lean); }
+.lean-legend { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.lean-legend__item { display: inline-flex; align-items: center; gap: 5px; color: var(--text-2); }
+.lean-legend__item::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--lean); }
+.blindspot { margin: 0; font-size: 12.5px; color: var(--text-2); }
+.blindspot strong { color: var(--lean); font-weight: 600; }
+.trending-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+
+.bias-dialog { width: min(560px, calc(100vw - 32px)); padding: 22px 24px 18px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.bias-dialog::backdrop { background: rgb(15 27 42 / 45%); }
+.bias-dialog__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.bias-body { display: flex; flex-direction: column; gap: 18px; margin: 16px 0; }
+.bias-row { display: flex; flex-direction: column; gap: 6px; }
+.bias-row__head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 14px; }
+.bias-row__head span { color: var(--text-3); font-size: 12.5px; }
+.bias-row .lean-bar { height: 12px; }
+.bias-note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
 
 /* ---- reader ------------------------------------------------------------- */
 .card { position: relative; scroll-margin-top: 160px; scroll-margin-bottom: 80px; }
