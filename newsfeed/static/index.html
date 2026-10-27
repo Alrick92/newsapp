@@ -80,6 +80,10 @@
         <option value="source">By source</option>
         <option value="relevance" id="sort-relevance" hidden>Best match</option>
       </select>
+      <label class="toggle feed-only" id="group-wrap" title="One card per story, with every outlet covering it">
+        <input type="checkbox" id="group">
+        <span>Group by story</span>
+      </label>
       <label class="toggle feed-only">
         <input type="checkbox" id="unread-only">
         <span>Unread only</span>
@@ -149,12 +153,15 @@
         <h3 class="card__title"><a target="_blank" rel="noopener noreferrer"></a></h3>
         <p class="card__desc"></p>
         <p class="card__also" hidden></p>
+        <div class="card__story" hidden></div>
         <div class="card__summary" hidden></div>
+        <div class="compare" hidden></div>
         <a class="card__url" target="_blank" rel="noopener noreferrer"></a>
         <div class="card__actions">
           <button class="act act--read" type="button"></button>
           <button class="act act--star" type="button" aria-pressed="false"></button>
           <button class="act act--summary" type="button" hidden>Summarize</button>
+          <button class="act act--compare" type="button" hidden>Compare coverage</button>
         </div>
       </div>
     </article>

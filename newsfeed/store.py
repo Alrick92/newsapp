@@ -5,7 +5,9 @@ kept forever; a nightly prune deletes the rest and returns the space to the
 disk. The UI shows the last DISPLAY_HOURS (72) unless the reader picks a
 longer window. Read/star state, saved summaries, feed polling state, og:image
 progress and the trending snapshot all live in this one file, and a full-text
-index (FTS5) over titles and feed text backs search.
+index (FTS5) over titles and feed text backs search. Each item also records
+the story cluster it belongs to (see stories.py), so the list can be grouped
+by story.
 
 Schema changes are applied in order by `_migrate`, tracked with SQLite's
 `user_version`, so an existing database is upgraded in place once.
@@ -101,6 +103,12 @@ _MIGRATIONS = [
         INSERT INTO items_fts (rowid, title, content) VALUES (new.rowid, new.title, new.content);
     END;
     INSERT INTO items_fts (items_fts) VALUES ('rebuild');
+    """,
+    # 2: story clusters. story_id is the id of the cluster's first item; NULL until
+    # the clustering pass (stories.py) has seen the item.
+    """
+    ALTER TABLE items ADD COLUMN story_id TEXT;
+    CREATE INDEX items_story ON items (story_id, published DESC);
     """,
 ]
 SCHEMA_VERSION = len(_MIGRATIONS)
@@ -212,6 +220,9 @@ class Store:
         with self._lock, self._db:
             removed = self._db.execute(
                 "DELETE FROM items WHERE published < ? AND starred_at IS NULL", (cutoff,)).rowcount
+            # Cached coverage comparisons (compare.py) go with the stories they describe.
+            self._db.execute("DELETE FROM meta WHERE key LIKE 'compare:%' AND json_extract(value, '$.at') < ?",
+                             (cutoff,))
         with self._lock:
             self._db.execute("PRAGMA incremental_vacuum")
         self.set_meta("last_purge", now)
@@ -311,6 +322,60 @@ class Store:
             rows = self._db.execute(f"SELECT {columns} FROM {source} WHERE {where} ORDER BY {order}{page}",
                                     params).fetchall()
         return total, [_row_to_item(r) for r in rows]
+
+    def search_stories(self, *, limit: int, offset: int = 0, **filters) -> tuple[int, list[tuple[Item, list[Item]]]]:
+        """Matching items grouped by story, newest story first; returns (stories, page).
+
+        A story matches when any of its items does; each page entry is (lead,
+        others): the lead is the newest matching item, the others are the rest
+        of the story's stored items, whatever the filters, so its coverage is
+        complete. Items not yet clustered stand alone.
+        """
+        where, params = self._where(**filters)
+        key = "COALESCE(items.story_id, items.id)"
+        with self._lock:
+            total = self._db.execute(f"SELECT COUNT(DISTINCT {key}) FROM items WHERE {where}", params).fetchone()[0]
+            keys = [r[0] for r in self._db.execute(
+                f"SELECT {key} AS story, MAX(items.published) AS latest FROM items WHERE {where}"
+                f" GROUP BY story ORDER BY latest DESC LIMIT {int(limit)} OFFSET {int(offset)}", params).fetchall()]
+            if not keys:
+                return total, []
+            marks = ",".join("?" * len(keys))
+            leads = self._db.execute(
+                f"SELECT {_SELECT_LIST}, {key} AS story FROM items WHERE {key} IN ({marks}) AND {where}"
+                " ORDER BY items.published DESC", [*keys, *params]).fetchall()
+            members = self._db.execute(
+                f"SELECT {_SELECT_LIST}, {key} AS story FROM items WHERE {key} IN ({marks})"
+                " ORDER BY items.published DESC", keys).fetchall()
+        lead_of: dict[str, Item] = {}
+        for row in leads:
+            lead_of.setdefault(row["story"], _row_to_item({k: row[k] for k in row.keys() if k != "story"}))
+        others: dict[str, list[Item]] = {k: [] for k in keys}
+        for row in members:
+            if row["id"] != lead_of[row["story"]].id:
+                others[row["story"]].append(_row_to_item({k: row[k] for k in row.keys() if k != "story"}))
+        return total, [(lead_of[k], others[k]) for k in keys]
+
+    def cluster_window(self, hours: float, now: float | None = None) -> list[sqlite3.Row]:
+        """(id, title, published, story_id) of items in the window, oldest first, for clustering."""
+        with self._lock:
+            return self._db.execute(
+                "SELECT id, title, published, story_id FROM items WHERE published >= ? ORDER BY published, id",
+                ((now or time.time()) - hours * 3600,)).fetchall()
+
+    def set_story_ids(self, assignments: dict[str, str]) -> None:
+        with self._lock, self._db:
+            self._db.executemany("UPDATE items SET story_id = ? WHERE id = ?",
+                                 [(story, item) for item, story in assignments.items()])
+
+    def items_by_id(self, ids: list[str]) -> list[Item]:
+        """Items (list columns only) for the given ids, newest first; unknown ids are skipped."""
+        if not ids:
+            return []
+        with self._lock:
+            rows = self._db.execute(f"SELECT {_SELECT_LIST} FROM items WHERE id IN ({','.join('?' * len(ids))})"
+                                    " ORDER BY published DESC", ids).fetchall()
+        return [_row_to_item(r) for r in rows]
 
     def query(self, **kwargs) -> list[Item]:
         return self.search(**kwargs)[1]

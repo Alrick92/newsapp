@@ -32,6 +32,12 @@ private: see [Keep it private](#keep-it-private).
 - **Cards:** Mark read / Mark unread, Star, and Summarize. Opening a story
   marks it read. When several feeds carry the same story it's stored once and
   shows "Also in" links to the others, so it has one read state.
+- **Group by story** (Latest, on by default): one card per story instead of
+  one per article, newest story first. The card shows the latest matching
+  article, the story's coverage bar, and a "3 sources · 2 more articles"
+  list of the other outlets. Marking it read marks the whole story read. A
+  story shows if any of its articles matches the filters, and lists all of
+  them. Search results and the "By source" order list single articles.
 - **Political lean:** each source can carry a rating (Left, Lean left,
   Center, Lean right, Right) shown as a tag next to its name. Every trending
   story gets a coverage bar: the share of its rated sources on the left, in
@@ -142,6 +148,23 @@ OPML, so you can change any rating; the change shows on the next page load.
   read in the last 7, 30 or 90 days, next to the lean of everything your
   feeds published in that time, so you can tell your own habits apart from
   the mix of your feed list.
+- **Compare coverage** (on trending stories and grouped stories covered by
+  at least two sides, when an AI provider is set up): the AI gets each
+  side's headlines and feed snippets separately and describes what they
+  report alike, how each side frames the story, and the main differences
+  in emphasis and wording. It works from that text only and doesn't judge
+  which side is right. Unrated sources are left out. A comparison is saved
+  for that set of articles, so asking again is free until new coverage
+  arrives. New comparisons are limited to 20 an hour
+  (`NEWSFEED_COMPARISONS_PER_HOUR`).
+
+**How stories are grouped.** After each poll, new articles from the last 72
+hours are matched to existing stories by shared headline keywords. Words
+that appear in many headlines are ignored, and word endings are trimmed so
+"exploited" matches "exploitation". An article that matches nothing starts
+a new story. Groupings never change once made, so a story only grows. This
+is keyword matching, not AI: unrelated headlines that share two unusual
+words can occasionally end up together.
 
 **About the bundled ratings.** The ratings in `newsfeed/feeds.opml` are a
 starting point written for this project. They aren't taken from AllSides,
@@ -360,7 +383,8 @@ only the rows they need, so stories aren't held in memory.
 | Saved | Kept |
 |---|---|
 | Stories: title, feed summary, full feed text (for search and summaries), link, image address, source, time | 90 days (`NEWSFEED_RETENTION_DAYS`) |
-| Read and starred state, saved summaries | With the story; starred stories are kept for good |
+| Read and starred state, saved summaries, story grouping | With the story; starred stories are kept for good |
+| Coverage comparisons | 90 days, then pruned with the stories |
 | Feed caching details (`ETag` / `Last-Modified`), last success and error | Always; the first poll after a restart is a cheap "not modified" check |
 | Latest trending result, last AI request time | Always; a restart doesn't trigger an extra AI call |
 
@@ -388,7 +412,8 @@ only the rows they need, so stories aren't held in memory.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/items?category=&sources=a,b&q=&hours=&has_image=&unread=&starred=&sort=newest\|source\|relevance&limit=&offset=` | Filtered items with read/starred state, plus total and unread counts per category; `q` is full-text search |
+| `GET /api/items?category=&sources=a,b&q=&hours=&has_image=&unread=&starred=&sort=newest\|source\|relevance&group=&limit=&offset=` | Filtered items with read/starred state, plus total and unread counts per category; `q` is full-text search. `group=true` returns one entry per story (`grouped: true`), each with `story`: size, source count, coverage and the other articles; ignored with `q`, `starred` or another sort |
+| `POST /api/compare` | Body `{"ids": [...]}` (the articles of one story): how left, center and right outlets frame it (`common`, `left`, `center`, `right`, `differences`, `counts`; saved; 404 without a provider, 422 when only one side covers it, 429 over the hourly limit) |
 | `POST /api/items/{id}/read` | Body `{"read": true\|false}` |
 | `POST /api/items/read` | Body `{"ids": [...], "read": true\|false}`; set many at once |
 | `POST /api/items/mark-all-read?…` | Mark everything matching the list filters read; returns the ids, for undo |
@@ -402,7 +427,7 @@ only the rows they need, so stories aren't held in memory.
 | `POST /api/refresh` | Poll every feed now |
 | `GET /api/feeds` | Per-feed health: last success, last error, stories in the last 72h |
 | `GET /healthz` | Health check for the load balancer and Docker |
-| `GET /api/meta` | Categories, regions, sources (with `bias` and `factuality`), totals, starred count, whether summaries are on, feed-list errors |
+| `GET /api/meta` | Categories, regions, sources (with `bias` and `factuality`), totals, starred count, whether summaries and comparisons are on, feed-list errors |
 
 ## Configuration
 
@@ -425,6 +450,7 @@ only the rows they need, so stories aren't held in memory.
 | `NEWSFEED_RETENTION_DAYS` | `90` | Days to keep stories (starred are kept for good) |
 | `NEWSFEED_PRUNE_HOUR` | `3` | Hour (server local time) after which the nightly prune runs |
 | `NEWSFEED_SUMMARIES_PER_HOUR` | `30` | New article summaries allowed per hour |
+| `NEWSFEED_COMPARISONS_PER_HOUR` | `20` | New coverage comparisons allowed per hour |
 | `NEWSFEED_SUMMARY_MIN_CHARS` | `600` | Feed text needed before a story gets a Summarize button |
 | `NEWSFEED_OG_IMAGE_BUDGET` | `40` | og:image lookups per refresh (`0` disables) |
 | `NEWSFEED_USER_AGENT` | generic | Identify your deployment to publishers |

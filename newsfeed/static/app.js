@@ -17,7 +17,7 @@ const FACTUALITY_LABEL = { "very-high": "Very high factuality", high: "High fact
 
 const $ = (sel) => document.querySelector(sel);
 const state = { view: "trending", category: "", region: "", q: "", hours: 72, sources: new Set(), sort: "newest",
-  hasImage: false, unreadOnly: false, blindspot: false, offset: 0 };
+  hasImage: false, unreadOnly: false, blindspot: false, group: true, offset: 0 };
 let meta = null;
 let trendingTimer = null;
 let counts = null; // per-category totals for the current filters, once loaded
@@ -260,6 +260,7 @@ function readHash() {
   state.hasImage = p.get("img") === "1";
   state.unreadOnly = p.get("unread") === "1";
   state.blindspot = p.get("blindspot") === "1";
+  state.group = p.get("group") !== "0";
 }
 
 function writeHash() {
@@ -274,13 +275,14 @@ function writeHash() {
   if (state.hasImage) p.set("img", "1");
   if (state.unreadOnly) p.set("unread", "1");
   if (state.blindspot) p.set("blindspot", "1");
+  if (!state.group) p.set("group", "0");
   const hash = p.toString();
   history.replaceState(null, "", hash ? `#${hash}` : location.pathname);
 }
 
 function filtersActive() {
   return state.category || state.region || state.q || state.hours !== 72 || state.sources.size
-    || state.sort !== "newest" || state.hasImage || state.unreadOnly;
+    || state.sort !== "newest" || state.hasImage || state.unreadOnly || !state.group;
 }
 
 // ---- chrome ----------------------------------------------------------------
@@ -378,6 +380,11 @@ function syncControls() {
   $("#sort").value = state.sort;
   $("#has-image").checked = state.hasImage;
   $("#unread-only").checked = state.unreadOnly;
+  // Grouping applies to the newest-first list; search results and other orders list articles.
+  const canGroup = !state.q && state.sort === "newest";
+  $("#group").checked = state.group && canGroup;
+  $("#group").disabled = !canGroup;
+  $("#group-wrap").classList.toggle("is-disabled", !canGroup);
   $("#clear").hidden = !filtersActive();
   $("#filters").classList.toggle("is-trending", state.view === "trending");
   $("#filters").classList.toggle("is-starred", state.view === "starred");
@@ -433,7 +440,23 @@ function paintStar(node, item) {
   btn.title = on ? "Remove star (s)" : "Star (s)";
 }
 
+// Reading a grouped story marks every article in it, so the story doesn't come back as unread.
+async function setStoryRead(item, read) {
+  const members = (item.story?.items || []).filter((m) => Boolean(m.read_at) !== read);
+  if (!members.length) return;
+  const at = read ? Date.now() / 1000 : null;
+  for (const m of members) { m.read_at = at; adjustUnread(m.category, read ? -1 : 1); }
+  const body = { ids: members.map((m) => m.id), read };
+  try {
+    await post("/api/items/read", body);
+  } catch (err) {
+    if (err instanceof OfflineError) { queueChange("/api/items/read", body); return; }
+    toast(`Couldn't save: ${err.message}`);
+  }
+}
+
 async function setRead(node, item, read) {
+  setStoryRead(item, read);
   if (Boolean(item.read_at) === read) return;
   const before = item.read_at;
   item.read_at = read ? Date.now() / 1000 : null;
@@ -490,6 +513,55 @@ async function summarize(node, item) {
   }
 }
 
+// ---- compare coverage --------------------------------------------------------
+
+function canCompare(cov) {
+  return meta?.compare_enabled && cov && SIDES.filter(([side]) => cov.sides[side]).length >= 2;
+}
+
+function showComparison(box, res) {
+  const sides = SIDES.filter(([side]) => res[side]).map(([side, name]) =>
+    el("div", { class: `compare__side lean--${side}` },
+      el("strong", { text: `${name} (${res.counts[side]})` }), el("p", { text: res[side] })));
+  box.replaceChildren(
+    el("span", { class: "card__summary-label", text: "How the coverage compares" }),
+    res.common ? el("p", { class: "compare__common", text: res.common }) : null,
+    ...sides,
+    res.differences?.length ? el("ul", { class: "compare__diffs" }, ...res.differences.map((d) => el("li", { text: d }))) : null,
+    el("p", { class: "compare__note", text: "AI comparison of headlines and feed snippets only. Sides come from your feed list's ratings." }));
+  box.hidden = false;
+}
+
+async function compareCoverage(btn, box, ids) {
+  btn.disabled = true;
+  btn.textContent = "Comparing…";
+  try {
+    showComparison(box, await post("/api/compare", { ids: [...new Set(ids)] }));
+    btn.hidden = true;
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Compare coverage";
+    toast(err instanceof OfflineError ? "Comparisons need a connection." : err.message);
+  }
+}
+
+// The rest of a grouped story: coverage bar and the other outlets' articles.
+function storyBlock(item) {
+  const st = item.story;
+  const box = el("div", { class: "card__story" });
+  box.append(coverageBlock(st.coverage));
+  const list = el("ul", { class: "story__sources" }, ...st.items.map((it) =>
+    el("li", {},
+      el("a", { class: "src-title", href: safeHref(it.url), target: "_blank", rel: "noopener noreferrer", text: it.title }),
+      el("span", { class: "src-meta" },
+        el("span", { class: "src-name", text: it.source }), leanTag(it.source_id),
+        el("span", { text: timeAgo(it.published) })))));
+  const n = st.items.length;
+  box.append(el("details", { class: "card__more" },
+    el("summary", { text: `${st.source_count} sources · ${n} more ${n === 1 ? "article" : "articles"}` }), list));
+  return box;
+}
+
 function card(item) {
   withPending(item);
   const node = $("#card-tpl").content.firstElementChild.cloneNode(true);
@@ -530,6 +602,17 @@ function card(item) {
     also.hidden = false;
   }
 
+  if (item.story?.items.length) {
+    node.querySelector(".card__story").replaceWith(storyBlock(item));
+    node.classList.add("card--story");
+  }
+  if (item.story && canCompare(item.story.coverage)) {
+    const btn = node.querySelector(".act--compare");
+    btn.hidden = false;
+    btn.addEventListener("click", () => compareCoverage(btn, node.querySelector(".compare"),
+      [item.id, ...item.story.items.map((m) => m.id)]));
+  }
+
   const url = node.querySelector(".card__url");
   url.href = href;
   url.append(el("span", { text: displayUrl(item.url) }));
@@ -563,6 +646,7 @@ function listParams() {
   if (sources.length) params.set("sources", sources.join(","));
   if (state.hasImage) params.set("has_image", "true");
   if (state.view === "starred") params.set("starred", "true");
+  else if (state.group) params.set("group", "true");
   return params;
 }
 
@@ -594,7 +678,7 @@ async function loadFeed(append = false) {
   else grid.replaceChildren(emptyState());
 
   const shown = Math.min(state.offset + PAGE_SIZE, data.total);
-  const noun = state.view === "starred" ? "starred stories" : state.q ? "matches" : "stories";
+  const noun = state.view === "starred" ? "starred stories" : state.q ? "matches" : data.grouped ? "stories" : "articles";
   $("#count").textContent = data.total ? `Showing ${shown} of ${data.total} ${noun}` : "";
   $("#more").hidden = shown >= data.total;
 }
@@ -707,8 +791,16 @@ function story(s, rank, aiWritten) {
       // Only an AI writes a real reason; keyword clustering would just restate the source count.
       aiWritten && s.why_trending ? el("p", { class: "story__why", text: s.why_trending }) : null,
       s.coverage ? coverageBlock(s.coverage) : null,
+      canCompare(s.coverage) ? compareControl(s.items.map((it) => it.id)) : null,
       sources,
       more > 0 ? el("p", { class: "src-more", text: `${more} more ${more === 1 ? "source" : "sources"}` }) : null));
+}
+
+function compareControl(ids) {
+  const box = el("div", { class: "compare", hidden: true });
+  const btn = el("button", { class: "act act--compare", type: "button", text: "Compare coverage" });
+  btn.addEventListener("click", () => compareCoverage(btn, box, ids));
+  return el("div", { class: "story__compare" }, btn, box);
 }
 
 async function loadTrending(force = false) {
@@ -828,8 +920,9 @@ function wire() {
   $("#sort").addEventListener("change", (e) => { state.sort = e.target.value; state.offset = 0; changed(); });
   $("#has-image").addEventListener("change", (e) => { state.hasImage = e.target.checked; state.offset = 0; changed(); });
   $("#unread-only").addEventListener("change", (e) => { state.unreadOnly = e.target.checked; state.offset = 0; changed(); });
+  $("#group").addEventListener("change", (e) => { state.group = e.target.checked; state.offset = 0; changed(); });
   $("#clear").addEventListener("click", () => {
-    Object.assign(state, { category: "", region: "", q: "", hours: 72, sort: "newest", hasImage: false, unreadOnly: false, offset: 0 });
+    Object.assign(state, { category: "", region: "", q: "", hours: 72, sort: "newest", hasImage: false, unreadOnly: false, group: true, offset: 0 });
     state.sources.clear();
     renderSourcesPanel();
     changed();

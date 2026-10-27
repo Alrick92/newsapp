@@ -15,11 +15,14 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 
-from .bias import reading_profile, with_coverage
+from .bias import blindspot, reading_profile, tally, with_coverage
+from .compare import MAX_ITEMS as COMPARE_MAX_ITEMS, CompareError, Comparer
 from .feeds import DEFAULT, FeedList, default_opml_path
 from .fetcher import Fetcher
 from .opml import write_opml
+from .items import Item
 from .store import DISPLAY_HOURS, RETENTION_DAYS, Store
+from .stories import cluster
 from .summaries import Summarizer, SummaryError
 from .trending import TrendingEngine
 
@@ -52,6 +55,10 @@ class BulkRead(BaseModel):
     read: bool = True
 
 
+class CompareRequest(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=200)
+
+
 def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: Path | None = None) -> FastAPI:
     demo = os.environ.get("NEWSFEED_DEMO") == "1" if demo is None else demo
     poll = (not demo) if poll is None else poll
@@ -67,11 +74,13 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
     fetcher = Fetcher(store, feed_list=feed_list) if feed_list else Fetcher(store)
     trending = TrendingEngine(store, categories=lambda: catalog().categories)
     summarizer = Summarizer(store, trending.provider)
+    comparer = Comparer(store, trending.provider, lambda: catalog().by_id)
 
     async def loop() -> None:
         while True:
             try:
                 await fetcher.refresh()
+                await asyncio.to_thread(cluster, store)
                 await trending.update()
             except Exception:  # keep the poller alive whatever one cycle does
                 log.exception("refresh cycle failed")
@@ -83,6 +92,7 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
             from .demo import demo_items
             store.add(demo_items(time.time()))
             store.last_refresh = time.time()
+            cluster(store)
         else:
             store.import_json_snapshot(data_dir / "items.json")  # pre-SQLite installs
         task = asyncio.create_task(loop()) if poll else None
@@ -111,6 +121,7 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
                          "region": f.region, "bias": f.bias, "factuality": f.factuality} for f in cat.feeds],
             "feed_list_error": feed_list.error if feed_list else None,
             "summaries_enabled": summarizer.enabled,
+            "compare_enabled": comparer.enabled,
             "starred": store.starred_count(),
             "total": store.count(hours=DISPLAY_HOURS),
             "stored": store.count(),
@@ -132,17 +143,37 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
         unread: bool = False,
         starred: bool = Query(False, description="Starred items of any age"),
         sort: str = Query("newest", pattern="^(newest|source|relevance)$"),
+        group: bool = Query(False, description="One entry per story, newest first (ignored with q, starred or another sort)"),
         limit: int = Query(60, ge=1, le=500),
         offset: int = Query(0, ge=0),
     ) -> dict:
         filters = list_filters(category, sources, q, hours, has_image, unread, starred)
-        total, page = store.search(sort=sort, limit=limit, offset=offset, **filters)
         totals, unread_counts = store.category_counts(**filters)
+        grouped = group and not q and not starred and sort == "newest"
+        if grouped:
+            filters.pop("q")
+            total, stories = store.search_stories(limit=limit, offset=offset, **filters)
+            entries = [{**item_dict(lead), "story": story_dict(lead, others)} for lead, others in stories]
+        else:
+            total, page = store.search(sort=sort, limit=limit, offset=offset, **filters)
+            entries = [item_dict(i) for i in page]
+        return {"total": total, "grouped": grouped, "counts": totals, "unread_counts": unread_counts, "items": entries}
+
+    def item_dict(item: Item) -> dict:
+        return {**item.to_dict(), "summarizable": summarizer.can_summarize(item.content_len)}
+
+    def story_dict(lead: Item, others: list[Item]) -> dict:
+        members = [lead, *others]
+        counts = tally((sid for i in members for sid in (i.source_id, *(a["source_id"] for a in i.also))),
+                       catalog().by_id)
         return {
-            "total": total,
-            "counts": totals,
-            "unread_counts": unread_counts,
-            "items": [{**i.to_dict(), "summarizable": summarizer.can_summarize(i.content_len)} for i in page],
+            "size": len(members),
+            "source_count": len({s for i in members for s in (i.source, *(a["source"] for a in i.also))}),
+            "coverage": {**counts, "blindspot": blindspot(counts["sides"])},
+            "items": [{"id": i.id, "title": i.title, "url": i.url, "source": i.source, "source_id": i.source_id,
+                       "source_class": i.source_class, "category": i.category, "published": i.published,
+                       "read_at": i.read_at}
+                      for i in others],
         }
 
     @app.post("/api/items/{item_id}/read")
@@ -183,6 +214,15 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
         snap = trending.snapshot()
         return {**snap, "stories": with_coverage(snap["stories"], catalog().by_id)}
 
+    @app.post("/api/compare")
+    async def compare(body: CompareRequest) -> dict:
+        """How left, center and right outlets frame one story (item ids from a trending story or story group)."""
+        try:
+            result, cached = await comparer.compare(body.ids[:COMPARE_MAX_ITEMS])
+        except CompareError as exc:
+            raise HTTPException(exc.status, str(exc)) from None
+        return {**result, "cached": cached}
+
     @app.get("/api/trending")
     async def get_trending() -> dict:
         if trending.stale() and not trending.running:
@@ -194,6 +234,7 @@ def create_app(*, demo: bool | None = None, poll: bool | None = None, data_dir: 
         if demo:
             return {"polled": 0, "added": 0, "total": store.count(), "demo": True}
         result = await fetcher.refresh(force=True)
+        await asyncio.to_thread(cluster, store)
         asyncio.create_task(trending.update())
         return result
 

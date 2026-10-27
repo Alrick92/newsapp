@@ -360,6 +360,25 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .act--star[aria-pressed="true"] { color: var(--accent-strong); border-color: var(--accent); background: var(--accent-soft); }
 .act--star[aria-pressed="true"] svg { fill: currentColor; }
 .act--summary { margin-left: auto; }
+.act--compare { margin-left: auto; }
+.act--summary:not([hidden]) + .act--compare { margin-left: 0; }
+
+/* ---- story groups and coverage comparisons -------------------------------- */
+.card__story { display: flex; flex-direction: column; gap: 8px; }
+.card__more summary { cursor: pointer; font-size: 12.5px; font-weight: 500; color: var(--text-2); }
+.card__more summary:hover { color: var(--accent-strong); }
+.card__more .story__sources { margin-top: 4px; }
+.toggle.is-disabled { opacity: .5; cursor: not-allowed; }
+.compare { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: var(--surface-2); border-radius: 10px; }
+.compare[hidden] { display: none; }
+.compare p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text); }
+.compare__side { padding-left: 10px; border-left: 3px solid var(--lean); }
+.compare__side strong { font-size: 12.5px; color: var(--lean); }
+.compare__diffs { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.5; color: var(--text-2); }
+.compare .compare__note { font-size: 12px; color: var(--text-3); }
+.story__compare { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.story__compare .act--compare { margin-left: 0; }
+.story__compare .compare { align-self: stretch; }
 
 .toast {
   position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 40;
