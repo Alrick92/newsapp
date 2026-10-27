@@ -16,6 +16,11 @@
       <outline type="rss" text="Fox News" title="Fox News" xmlUrl="https://moxie.foxnews.com/google-publisher/world.xml" htmlUrl="https://moxie.foxnews.com" nf:id="fox-world" nf:class="publisher" nf:poll="15" nf:bias="right" />
       <outline type="rss" text="New York Post" title="New York Post" xmlUrl="https://nypost.com/world-news/feed/" htmlUrl="https://nypost.com" nf:id="nypost-world" nf:class="publisher" nf:poll="15" nf:bias="lean-right" />
       <outline type="rss" text="Washington Examiner" title="Washington Examiner" xmlUrl="https://www.washingtonexaminer.com/section/policy/foreign-policy/feed/" htmlUrl="https://www.washingtonexaminer.com" nf:id="examiner-world" nf:class="publisher" nf:poll="30" nf:bias="right" />
+      <outline type="rss" text="ABC News" title="ABC News" xmlUrl="https://abcnews.com/abcnews/internationalheadlines" htmlUrl="https://abcnews.com" nf:id="abc-world" nf:class="publisher" nf:poll="15" nf:bias="lean-left" />
+      <outline type="rss" text="The Independent" title="The Independent" xmlUrl="https://www.independent.co.uk/news/world/rss" htmlUrl="https://www.independent.co.uk" nf:id="independent-world" nf:class="publisher" nf:poll="15" nf:bias="lean-left" />
+      <outline type="rss" text="Financial Times" title="Financial Times" xmlUrl="https://www.ft.com/world?format=rss" htmlUrl="https://www.ft.com" nf:id="ft-world" nf:class="publisher" nf:poll="15" nf:bias="center" />
+      <outline type="rss" text="Euronews" title="Euronews" xmlUrl="https://www.euronews.com/rss?format=mrss&amp;level=theme&amp;name=news" htmlUrl="https://www.euronews.com" nf:id="euronews" nf:class="publisher" nf:poll="15" nf:bias="center" />
+      <outline type="rss" text="UnHerd" title="UnHerd" xmlUrl="https://unherd.com/feed/" htmlUrl="https://unherd.com" nf:id="unherd" nf:class="publisher" nf:poll="30" nf:bias="lean-right" />
       <outline type="rss" text="UN News" title="UN News" xmlUrl="https://news.un.org/feed/subscribe/en/news/all/rss.xml" htmlUrl="https://news.un.org" nf:id="un-news" nf:class="institutional" nf:poll="30" />
     </outline>
     <outline text="Politics" title="Politics" nf:key="politics" nf:allLabel="US and international">
@@ -36,6 +41,16 @@
         <outline type="rss" text="National Review" title="National Review" xmlUrl="https://www.nationalreview.com/feed/" htmlUrl="https://www.nationalreview.com" nf:id="national-review" nf:class="publisher" nf:poll="30" nf:bias="right" />
         <outline type="rss" text="The Dispatch" title="The Dispatch" xmlUrl="https://thedispatch.com/feed/" htmlUrl="https://thedispatch.com" nf:id="the-dispatch" nf:class="publisher" nf:poll="30" nf:bias="lean-right" />
         <outline type="rss" text="Reason" title="Reason" xmlUrl="https://reason.com/feed/" htmlUrl="https://reason.com" nf:id="reason" nf:class="publisher" nf:poll="30" nf:bias="lean-right" />
+        <outline type="rss" text="ABC News Politics" title="ABC News Politics" xmlUrl="https://abcnews.com/abcnews/politicsheadlines" htmlUrl="https://abcnews.com" nf:id="abc-politics" nf:class="publisher" nf:poll="15" nf:bias="lean-left" />
+        <outline type="rss" text="POLITICO" title="POLITICO" xmlUrl="https://rss.politico.com/politics-news.xml" htmlUrl="https://rss.politico.com" nf:id="politico-us" nf:class="publisher" nf:poll="15" nf:bias="lean-left" />
+        <outline type="rss" text="The Atlantic" title="The Atlantic" xmlUrl="https://www.theatlantic.com/feed/all/" htmlUrl="https://www.theatlantic.com" nf:id="the-atlantic" nf:class="publisher" nf:poll="30" nf:bias="lean-left" />
+        <outline type="rss" text="Vox" title="Vox" xmlUrl="https://www.vox.com/rss/index.xml" htmlUrl="https://www.vox.com" nf:id="vox" nf:class="publisher" nf:poll="30" nf:bias="left" />
+        <outline type="rss" text="Axios" title="Axios" xmlUrl="https://api.axios.com/feed/" htmlUrl="https://api.axios.com" nf:id="axios" nf:class="publisher" nf:poll="15" nf:bias="center" />
+        <outline type="rss" text="Bloomberg Politics" title="Bloomberg Politics" xmlUrl="https://www.bloomberg.com/feeds/politics/news.rss" htmlUrl="https://www.bloomberg.com" nf:id="bloomberg-politics" nf:class="publisher" nf:poll="15" nf:bias="center" />
+        <outline type="rss" text="The Free Press" title="The Free Press" xmlUrl="https://www.thefp.com/feed" htmlUrl="https://www.thefp.com" nf:id="the-free-press" nf:class="publisher" nf:poll="30" nf:bias="lean-right" />
+        <outline type="rss" text="Washington Free Beacon" title="Washington Free Beacon" xmlUrl="https://freebeacon.com/feed/" htmlUrl="https://freebeacon.com" nf:id="free-beacon" nf:class="publisher" nf:poll="30" nf:bias="right" />
+        <outline type="rss" text="Daily Caller" title="Daily Caller" xmlUrl="https://dailycaller.com/feed/" htmlUrl="https://dailycaller.com" nf:id="daily-caller" nf:class="publisher" nf:poll="15" nf:bias="right" />
+        <outline type="rss" text="The Federalist" title="The Federalist" xmlUrl="https://thefederalist.com/feed/" htmlUrl="https://thefederalist.com" nf:id="the-federalist" nf:class="publisher" nf:poll="30" nf:bias="right" />
       </outline>
       <outline text="International" title="International" nf:region="INTL">
         <outline type="rss" text="BBC Politics" title="BBC Politics" xmlUrl="https://feeds.bbci.co.uk/news/politics/rss.xml" htmlUrl="https://feeds.bbci.co.uk" nf:id="bbc-politics" nf:class="publisher" nf:poll="15" nf:bias="center" />
@@ -82,6 +97,8 @@
       <outline type="rss" text="WSJ Markets" title="WSJ Markets" xmlUrl="https://feeds.a.dj.com/rss/RSSMarketsMain.xml" htmlUrl="https://feeds.a.dj.com" nf:id="wsj-markets" nf:class="publisher" nf:poll="15" nf:bias="center" />
       <outline type="rss" text="New York Post Business" title="New York Post Business" xmlUrl="https://nypost.com/business/feed/" htmlUrl="https://nypost.com" nf:id="nypost-business" nf:class="publisher" nf:poll="30" nf:bias="lean-right" />
       <outline type="rss" text="Washington Examiner Economy" title="Washington Examiner Economy" xmlUrl="https://www.washingtonexaminer.com/section/economy/feed/" htmlUrl="https://www.washingtonexaminer.com" nf:id="examiner-economy" nf:class="publisher" nf:poll="30" nf:bias="right" />
+      <outline type="rss" text="Bloomberg Economics" title="Bloomberg Economics" xmlUrl="https://www.bloomberg.com/feeds/economics/news.rss" htmlUrl="https://www.bloomberg.com" nf:id="bloomberg-economics" nf:class="publisher" nf:poll="15" nf:bias="center" />
+      <outline type="rss" text="MarketWatch" title="MarketWatch" xmlUrl="https://feeds.content.dowjones.io/public/rss/mw_topstories" htmlUrl="https://feeds.content.dowjones.io" nf:id="marketwatch" nf:class="publisher" nf:poll="15" nf:bias="center" />
       <outline type="rss" text="Federal Reserve" title="Federal Reserve" xmlUrl="https://www.federalreserve.gov/feeds/press_all.xml" htmlUrl="https://www.federalreserve.gov" nf:id="federal-reserve" nf:class="institutional" nf:poll="30" />
       <outline type="rss" text="European Central Bank" title="European Central Bank" xmlUrl="https://www.ecb.europa.eu/rss/press.html" htmlUrl="https://www.ecb.europa.eu" nf:id="ecb" nf:class="institutional" nf:poll="30" />
     </outline>

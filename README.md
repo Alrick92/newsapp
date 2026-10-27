@@ -93,7 +93,7 @@ loads its manifest, so installing works the same way.
 
 The feed list is an OPML file: folders become categories, and a folder inside
 a folder becomes a region (the states in Local, US/International in
-Politics). The app ships 71 curated feeds in `newsfeed/feeds.opml`.
+Politics). The app ships 107 curated feeds in `newsfeed/feeds.opml`.
 
 - **Where it lives:** on first run the bundled list is copied to
   `data/feeds.opml` (in Docker, `/data/feeds.opml` in the `newsfeed-data`
@@ -247,16 +247,18 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
 
 ## The bundled feeds
 
-- **90 feeds** in [`newsfeed/feeds.opml`](newsfeed/feeds.opml): the 15-feed
+- **107 feeds** in [`newsfeed/feeds.opml`](newsfeed/feeds.opml): the 15-feed
   production bundle from the RSS research brief, plus Microsoft Security,
   CISA, UN News, NPR, The Verge, WIRED (AI and Security), BBC Technology,
   IEEE Spectrum, Hugging Face and Krebs, and the groups below.
 - **World.** The Guardian, BBC News, Al Jazeera, DW, France 24, NPR, Sky
-  News, The Wall Street Journal, Fox News, the New York Post and the
-  Washington Examiner (foreign policy), plus UN News as a first-party source.
+  News, The Wall Street Journal, Fox News, the New York Post, the
+  Washington Examiner (foreign policy), ABC News, The Independent, the
+  Financial Times, Euronews and UnHerd, plus UN News as a first-party source.
 - **Economy.** BBC Business, The Guardian Economics, CNBC Economy, NPR
   Economy, DW Business, The Economist (finance & economics), WSJ Markets,
-  New York Post Business and Washington Examiner Economy, plus the
+  New York Post Business, Washington Examiner Economy, Bloomberg Economics
+  and MarketWatch, plus the
   Federal Reserve and the European Central Bank as first-party sources:
   their own announcements, so they add authority to a story but don't count
   as independent coverage.
@@ -265,7 +267,9 @@ Point the load balancer at **`http://newsfeed:8000`** on that network. Use
   - US: NPR Politics, PBS NewsHour, The New York Times, The Guardian US,
     CBS News, NBC News, The Hill, Roll Call (Congress), SCOTUSblog (Supreme
     Court), NewsNation, Fox News Politics, New York Post Politics,
-    Washington Examiner Politics, National Review, The Dispatch, Reason
+    Washington Examiner Politics, National Review, The Dispatch, Reason,
+    ABC News, POLITICO, The Atlantic, Vox, Axios, Bloomberg, The Free Press,
+    the Washington Free Beacon, the Daily Caller, The Federalist
   - International: BBC Politics, The Guardian Politics, POLITICO Europe,
     CBC Politics (Canada), Foreign Policy, Sky News Politics, GB News
 - **Local, by state.** Picking Local shows a second dropdown to narrow it to
